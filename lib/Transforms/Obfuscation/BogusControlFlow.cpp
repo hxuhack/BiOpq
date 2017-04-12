@@ -475,9 +475,13 @@ namespace {
 	bool InsertFproOpq(Module &M, Instruction* inst){
 		LLVMContext& context = M.getContext();
 		ArrayType* chAT = ArrayType::get(i8Type, 12);
-		StringRef* strRef = new StringRef("tmp.covprop");
-		Constant* fileVal = ConstantDataArray::getString(context, *strRef, true);
+
+		//StringRef* strRef = new StringRef("tmp.covprop");
+		Constant* fileVal = ConstantDataArray::getString(context, "tmp.covpro\00", true);
 		GlobalVariable* fileGV = new GlobalVariable(M, fileVal->getType(), false, GlobalValue::CommonLinkage, fileVal, "");
+		Constant* fattr = ConstantDataArray::getString(context, "ab+\00", true);
+		GlobalVariable* attrGV = new GlobalVariable(M, fileVal->getType(), false, GlobalValue::CommonLinkage, fattr, "");
+
 		AllocaInst* strAI = new AllocaInst(chAT,"", inst); 
 		AllocaInst* fpAI = new AllocaInst(ioFileType, "", inst);
 		BitCastInst* strBCI = new BitCastInst((Value*) strAI, i8PT, "", inst);
@@ -498,6 +502,27 @@ namespace {
 		ArrayRef<Value*> arMcpy(vecMcpy);
 
 		Instruction* mcpyI = CallInst::Create(mcpyFunc, arMcpy, "", inst);
+
+		GetElementPtrInst* fstrEPI = GetElementPtrInst::CreateInBounds(strAI, ar0I0,"", inst);
+		GetElementPtrInst* attrEPI = GetElementPtrInst::CreateInBounds(attrGV, ar0I0,"", inst);
+
+		vector<Value*> vecFopen;
+		vec0I0.push_back(fstrEPI);
+		vec0I0.push_back(attrEPI);
+		ArrayRef<Value*> arFopen(vecFopen);
+		Instruction* fopenI = CallInst::Create(fopenFunc, arFopen, "", inst);
+		StoreInst* fopenSI = new StoreInst(fopenI, fpAI, inst);
+		LoadInst* fopenLI = new LoadInst(fopenSI, "", inst);
+
+		ConstantPointerNull* nullPtr = ConstantPointerNull::get(ioFilePT);
+
+		ICmpInst* fpCI = new ICmpInst(inst, ICmpInst::ICMP_EQ, fopenLI, nullPtr);
+
+		BranchInst::Create(((BranchInst*) inst)->getSuccessor(0),
+			((BranchInst*) inst)->getSuccessor(1),(Value *) fpCI,
+			((BranchInst*) inst)->getParent());
+		inst->eraseFromParent(); // erase the branch
+
 	}
 
     /* doFinalization
