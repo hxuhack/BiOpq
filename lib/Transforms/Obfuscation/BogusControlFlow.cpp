@@ -20,6 +20,7 @@ StructType *ioMarkerType, *ioFileType;
 PointerType *i8PT, *ioMarkerPT, *ioFilePT;
 Constant *fopenFunc, *mcpyFunc;
 Constant *ci0, *ci1, *ci11, *bFalse;
+GlobalVariable *fileGV, *attrGV;
 
 loglevel_e loglevel = L3_DEBUG;
 
@@ -70,6 +71,62 @@ namespace {
 
 	  fopenFunc = M.getFunction("fopen");
 	  mcpyFunc = M.getFunction("llvm.memcpy.p0i8.p0i8.i64");
+
+ 	  Constant* fileVal = ConstantDataArray::getString(context, "tmp.covpro\00", true);
+	  Constant* fattr = ConstantDataArray::getString(context, "ab+\00", true);
+	  fileGV = new GlobalVariable(M, fileVal->getType(), false, GlobalValue::CommonLinkage, fileVal, "");
+	  attrGV = new GlobalVariable(M, fattr->getType(), false, GlobalValue::CommonLinkage, fattr, "");
+
+	  ioFileType = M.getTypeByName("IO_FILE");
+	  if(!ioFileType){
+		ioFileType = StructType::create(context, "IO_FILE");
+	  }
+	  ioMarkerType = M.getTypeByName("IO_MARKER");
+	  if(!ioMarkerType){
+		ioMarkerType = StructType::create(context, "IO_MARKER");
+	  }
+	  ioMarkerPT = PointerType::getUnqual(ioMarkerType);
+	  ioFilePT = PointerType::getUnqual(ioFileType);
+
+	  ArrayType* i8L1AT = ArrayType::get(i8Type, 1);
+	  ArrayType* i8L20AT = ArrayType::get(i8Type, 20);
+	  vector<Type*> vcFile, vcMarker;
+	  vcFile.push_back(i32Type);
+	  vcFile.push_back(i8PT);
+	  vcFile.push_back(i8PT);
+	  vcFile.push_back(i8PT);
+	  vcFile.push_back(i8PT);
+	  vcFile.push_back(i8PT);
+	  vcFile.push_back(i8PT);
+	  vcFile.push_back(i8PT);
+	  vcFile.push_back(i8PT);
+	  vcFile.push_back(i8PT);
+	  vcFile.push_back(i8PT);
+	  vcFile.push_back(i8PT);
+	  vcFile.push_back(ioMarkerPT);
+	  vcFile.push_back(ioFilePT);
+	  vcFile.push_back(i32Type);
+	  vcFile.push_back(i32Type);
+	  vcFile.push_back(i64Type);
+	  vcFile.push_back(i16Type);
+	  vcFile.push_back(i8Type);
+	  vcFile.push_back(i8L1AT);
+	  vcFile.push_back(i8PT);
+	  vcFile.push_back(i64Type);
+	  vcFile.push_back(i8PT);
+	  vcFile.push_back(i8PT);
+ 	  vcFile.push_back(i8PT);
+	  vcFile.push_back(i8PT);
+	  vcFile.push_back(i64Type);
+	  vcFile.push_back(i32Type);
+	  vcFile.push_back(i8L20AT);
+	  ArrayRef<Type*> arFile(vcFile);
+	  vcMarker.push_back(ioMarkerPT);
+	  vcMarker.push_back(ioFilePT);
+	  vcMarker.push_back(i32Type);
+	  ArrayRef<Type*> arMarker(vcMarker);
+	  ioFileType->setBody(arFile, false);
+	  ioMarkerType->setBody(arMarker, false);
 
       // If fla annotations
       if(toObfuscate(flag,&F,"bcf")) {
@@ -477,15 +534,11 @@ namespace {
 		ArrayType* chAT = ArrayType::get(i8Type, 12);
 
 		//StringRef* strRef = new StringRef("tmp.covprop");
-		Constant* fileVal = ConstantDataArray::getString(context, "tmp.covpro\00", true);
-		GlobalVariable* fileGV = new GlobalVariable(M, fileVal->getType(), false, GlobalValue::CommonLinkage, fileVal, "");
-		Constant* fattr = ConstantDataArray::getString(context, "ab+\00", true);
-		GlobalVariable* attrGV = new GlobalVariable(M, fileVal->getType(), false, GlobalValue::CommonLinkage, fattr, "");
 
 		AllocaInst* strAI = new AllocaInst(chAT,"", inst); 
-		AllocaInst* fpAI = new AllocaInst(ioFileType, "", inst);
+		AllocaInst* fpAI = new AllocaInst(ioFilePT, "", inst);
+/*
 		BitCastInst* strBCI = new BitCastInst((Value*) strAI, i8PT, "", inst);
-
 
 		vector<Value*> vec0I0;
 		vec0I0.push_back(ci0);
@@ -505,7 +558,6 @@ namespace {
 
 		GetElementPtrInst* fstrEPI = GetElementPtrInst::CreateInBounds(strAI, ar0I0,"", inst);
 		GetElementPtrInst* attrEPI = GetElementPtrInst::CreateInBounds(attrGV, ar0I0,"", inst);
-
 		vector<Value*> vecFopen;
 		vec0I0.push_back(fstrEPI);
 		vec0I0.push_back(attrEPI);
@@ -514,15 +566,16 @@ namespace {
 		StoreInst* fopenSI = new StoreInst(fopenI, fpAI, inst);
 		LoadInst* fopenLI = new LoadInst(fopenSI, "", inst);
 
-		ConstantPointerNull* nullPtr = ConstantPointerNull::get(ioFilePT);
+		//ConstantPointerNull* nullPtr;
 
-		ICmpInst* fpCI = new ICmpInst(inst, ICmpInst::ICMP_EQ, fopenLI, nullPtr);
+		ICmpInst* fpCI = new ICmpInst(inst, ICmpInst::ICMP_EQ, fopenLI, ci0);
 
 		BranchInst::Create(((BranchInst*) inst)->getSuccessor(0),
 			((BranchInst*) inst)->getSuccessor(1),(Value *) fpCI,
 			((BranchInst*) inst)->getParent());
 		inst->eraseFromParent(); // erase the branch
-
+		*/
+		InsertDefaultOpq(M,inst);
 	}
 
     /* doFinalization
@@ -587,47 +640,6 @@ namespace {
         }
       }
 
-	  ArrayType* i8L1AT = ArrayType::get(i8Type, 1);
-	  ArrayType* i8L20AT = ArrayType::get(i8Type, 20);
-	  vector<Type*> vcFile, vcMarker;
-	  vcFile.push_back(i32Type);
-	  vcFile.push_back(i8PT);
-	  vcFile.push_back(i8PT);
-	  vcFile.push_back(i8PT);
-	  vcFile.push_back(i8PT);
-	  vcFile.push_back(i8PT);
-	  vcFile.push_back(i8PT);
-	  vcFile.push_back(i8PT);
-	  vcFile.push_back(i8PT);
-	  vcFile.push_back(i8PT);
-	  vcFile.push_back(i8PT);
-	  vcFile.push_back(i8PT);
-	  vcFile.push_back(ioMarkerPT);
-	  vcFile.push_back(ioFilePT);
-	  vcFile.push_back(i32Type);
-	  vcFile.push_back(i32Type);
-	  vcFile.push_back(i64Type);
-	  vcFile.push_back(i16Type);
-	  vcFile.push_back(i8Type);
-	  vcFile.push_back(i8L1AT);
-	  vcFile.push_back(i8PT);
-	  vcFile.push_back(i64Type);
-	  vcFile.push_back(i8PT);
-	  vcFile.push_back(i8PT);
- 	  vcFile.push_back(i8PT);
-	  vcFile.push_back(i8PT);
-	  vcFile.push_back(i64Type);
-	  vcFile.push_back(i32Type);
-	  vcFile.push_back(i8L20AT);
-	  ArrayRef<Type*> arFile(vcFile);
-	  vcMarker.push_back(ioMarkerPT);
-	  vcMarker.push_back(ioFilePT);
-	  vcMarker.push_back(i32Type);
-	  ArrayRef<Type*> arMarker(vcMarker);
-	  ioFileType = StructType::get(context, arFile, true);
-	  ioMarkerType = StructType::get(context, arMarker, true);
-	  ioMarkerPT = PointerType::getUnqual(ioMarkerType);
-	  ioFilePT = PointerType::getUnqual(ioFileType);
 
       // Replacing all the branches we found
 	  // TODO: we replace the original simple opaque constant with secure predicates
