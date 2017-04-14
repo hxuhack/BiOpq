@@ -36,6 +36,7 @@
 #include "llvm/Transforms/IPO.h"
 #include "llvm/CryptoUtils.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Mangler.h"
 #include <list>
 #include <vector>
 

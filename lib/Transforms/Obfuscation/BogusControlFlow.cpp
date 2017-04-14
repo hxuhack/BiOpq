@@ -19,7 +19,7 @@ IntegerType *i1Type, *i8Type, * i16Type, *i32Type, *i64Type;
 StructType *ioMarkerType, *ioFileType;
 PointerType *i8PT, *ioMarkerPT, *ioFilePT;
 Constant *fopenFunc, *mcpyFunc;
-Constant *ci0, *ci1, *ci11, *bFalse;
+ConstantInt *ci0, *ci1, *ci11, *bFalse, *ci11_64;
 GlobalVariable *fileGV, *attrGV;
 
 loglevel_e loglevel = L3_DEBUG;
@@ -45,9 +45,9 @@ namespace {
     virtual bool runOnFunction(Function &F){
       // Check if the percentage is correct
 	  
-
-      LLVMContext& context = llvm::getGlobalContext();
 	  Module& M = *(F.getParent());
+      LLVMContext& context = M.getContext();
+
       if (ObfTimes <= 0) {
         context.emitError(Twine ("BogusControlFlow application number -boguscf-loop=x must be x > 0"));
       }
@@ -64,26 +64,33 @@ namespace {
 	  i64Type = IntegerType::getInt64Ty(context);
       i8PT = PointerType::getUnqual(i8Type);
 
-	  ci0 = (ConstantInt*) ConstantInt::getSigned(i64Type, 0);
-	  ci1 = (ConstantInt*) ConstantInt::getSigned(i64Type, 1);
-	  ci11 = (ConstantInt*) ConstantInt::getSigned(i64Type, 11);
+	  ci0 = (ConstantInt*) ConstantInt::getSigned(i32Type, 0);
+	  ci1 = (ConstantInt*) ConstantInt::getSigned(i32Type, 1);
+	  ci11 = (ConstantInt*) ConstantInt::getSigned(i32Type, 11);
 	  bFalse = (ConstantInt*) ConstantInt::getSigned(i1Type, 0);
+	  ci11_64 = (ConstantInt*) ConstantInt::getSigned(i64Type, 11);
 
-	  fopenFunc = M.getFunction("fopen");
-	  mcpyFunc = M.getFunction("llvm.memcpy.p0i8.p0i8.i64");
 
  	  Constant* fileVal = ConstantDataArray::getString(context, "tmp.covpro\00", true);
-	  Constant* fattr = ConstantDataArray::getString(context, "ab+\00", true);
-	  fileGV = new GlobalVariable(M, fileVal->getType(), false, GlobalValue::CommonLinkage, fileVal, "");
-	  attrGV = new GlobalVariable(M, fattr->getType(), false, GlobalValue::CommonLinkage, fattr, "");
+	  Constant* attrVal = ConstantDataArray::getString(context, "ab+\00", true);
+	  fileGV = new GlobalVariable(M, fileVal->getType(), false, GlobalValue::PrivateLinkage, 0, "file");
+	  attrGV = new GlobalVariable(M, attrVal->getType(), false, GlobalValue::PrivateLinkage, 0, "attribute");
+	  fileGV->setAlignment(1);
+	  attrGV->setAlignment(1);
+	  fileGV->setUnnamedAddr(true);
+	  attrGV->setUnnamedAddr(true);
+	  fileGV->setConstant(true);
+	  attrGV->setConstant(true);
+	  fileGV->setInitializer(fileVal);
+	  attrGV->setInitializer(attrVal);
 
-	  ioFileType = M.getTypeByName("IO_FILE");
+	  ioFileType = M.getTypeByName("struct._IO_FILE");
 	  if(!ioFileType){
-		ioFileType = StructType::create(context, "IO_FILE");
+		ioFileType = StructType::create(context, "struct._IO_FILE");
 	  }
-	  ioMarkerType = M.getTypeByName("IO_MARKER");
+	  ioMarkerType = M.getTypeByName("struct._IO_marker");
 	  if(!ioMarkerType){
-		ioMarkerType = StructType::create(context, "IO_MARKER");
+		ioMarkerType = StructType::create(context, "struct._IO_marker");
 	  }
 	  ioMarkerPT = PointerType::getUnqual(ioMarkerType);
 	  ioFilePT = PointerType::getUnqual(ioFileType);
@@ -128,6 +135,27 @@ namespace {
 	  ioFileType->setBody(arFile, false);
 	  ioMarkerType->setBody(arMarker, false);
 
+	  fopenFunc = M.getFunction("fopen");
+	  if(!fopenFunc){
+		vector<Type*> fopenPV;
+		fopenPV.push_back(i8PT);
+		fopenPV.push_back(i8PT);
+	    ArrayRef<Type*> fopenAR(fopenPV);
+		FunctionType* fopenFT = FunctionType::get(ioFilePT, fopenAR, false);
+		fopenFunc = M.getOrInsertFunction("fopen",fopenFT);
+	  }
+	  mcpyFunc = M.getFunction("llvm.memcpy.p0i8.p0i8.i64");
+	  if(!mcpyFunc){
+		vector<Type*> mcpyPV;
+		mcpyPV.push_back(i8PT);
+		mcpyPV.push_back(i8PT);
+		mcpyPV.push_back(i64Type);
+		mcpyPV.push_back(i32Type);
+		mcpyPV.push_back(i1Type);
+	    ArrayRef<Type*> mcpyAR(mcpyPV);
+		FunctionType* mcpyFT = FunctionType::get(Type::getVoidTy(context), mcpyAR, false);
+		mcpyFunc =M.getOrInsertFunction("llvm.memcpy.p0i8.p0i8.i64", mcpyFT);
+	  }
       // If fla annotations
       if(toObfuscate(flag,&F,"bcf")) {
         bogus(F);
@@ -531,25 +559,25 @@ namespace {
 
 	bool InsertFproOpq(Module &M, Instruction* inst){
 		LLVMContext& context = M.getContext();
-		ArrayType* chAT = ArrayType::get(i8Type, 12);
+		ArrayType* ch11AT = ArrayType::get(i8Type, 11);
 
 		//StringRef* strRef = new StringRef("tmp.covprop");
 
-		AllocaInst* strAI = new AllocaInst(chAT,"", inst); 
+		AllocaInst* strAI = new AllocaInst(ch11AT,"", inst); 
 		AllocaInst* fpAI = new AllocaInst(ioFilePT, "", inst);
-/*
 		BitCastInst* strBCI = new BitCastInst((Value*) strAI, i8PT, "", inst);
 
 		vector<Value*> vec0I0;
 		vec0I0.push_back(ci0);
 		vec0I0.push_back(ci0);
 		ArrayRef<Value*> ar0I0(vec0I0);
-		GetElementPtrInst* getStrEPI = GetElementPtrInst::CreateInBounds(fileGV, ar0I0,"", inst);
+		GetElementPtrInst* strEPI = GetElementPtrInst::CreateInBounds(fileGV, ar0I0,"", inst);
+		GetElementPtrInst* str2EPI = GetElementPtrInst::CreateInBounds(strAI, ar0I0,"", inst);
 
 		vector<Value*> vecMcpy;
 		vecMcpy.push_back(strBCI);
-		vecMcpy.push_back(getStrEPI);
-		vecMcpy.push_back(ci11);
+		vecMcpy.push_back(strEPI);
+		vecMcpy.push_back(ci11_64);
 		vecMcpy.push_back(ci1);
 		vecMcpy.push_back(bFalse);
 		ArrayRef<Value*> arMcpy(vecMcpy);
@@ -558,24 +586,22 @@ namespace {
 
 		GetElementPtrInst* fstrEPI = GetElementPtrInst::CreateInBounds(strAI, ar0I0,"", inst);
 		GetElementPtrInst* attrEPI = GetElementPtrInst::CreateInBounds(attrGV, ar0I0,"", inst);
-		vector<Value*> vecFopen;
-		vec0I0.push_back(fstrEPI);
-		vec0I0.push_back(attrEPI);
-		ArrayRef<Value*> arFopen(vecFopen);
+		vector<Value*> fopenVec;
+		fopenVec.push_back(fstrEPI);
+		fopenVec.push_back(attrEPI);
+		ArrayRef<Value*> arFopen(fopenVec);
 		Instruction* fopenI = CallInst::Create(fopenFunc, arFopen, "", inst);
 		StoreInst* fopenSI = new StoreInst(fopenI, fpAI, inst);
-		LoadInst* fopenLI = new LoadInst(fopenSI, "", inst);
+		LoadInst* fopenLI = new LoadInst(fpAI, "", inst);
 
-		//ConstantPointerNull* nullPtr;
+        ConstantPointerNull* nullPtr = ConstantPointerNull::get(ioFilePT);
 
-		ICmpInst* fpCI = new ICmpInst(inst, ICmpInst::ICMP_EQ, fopenLI, ci0);
+		ICmpInst* fpCI = new ICmpInst(inst, ICmpInst::ICMP_EQ, fopenLI, nullPtr);
 
 		BranchInst::Create(((BranchInst*) inst)->getSuccessor(0),
 			((BranchInst*) inst)->getSuccessor(1),(Value *) fpCI,
 			((BranchInst*) inst)->getParent());
 		inst->eraseFromParent(); // erase the branch
-		*/
-		InsertDefaultOpq(M,inst);
 	}
 
     /* doFinalization
