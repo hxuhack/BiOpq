@@ -1,6 +1,7 @@
 #include "llvm/Transforms/Obfuscation/BogusControlFlow.h"
 #include "llvm/Transforms/Obfuscation/Utils.h"
 #include "llvm/Transforms/Obfuscation/Logger.h"
+#include "llvm/Transforms/Obfuscation/MatrixBranchProg.h"
 
 // Stats
 #define DEBUG_TYPE "BogusControlFlow"
@@ -15,15 +16,17 @@ STATISTIC(FinalNumBasicBlocks,  "f. Final number of basic blocks in this module"
 // Options for the pass
 const int defaultObfRate = 30, defaultObfTime = 1;
 
-IntegerType *i1Type, *i8Type, * i16Type, *i32Type, *i64Type;
+IntegerType *i1Type, *i8Type, * i16Type, *i32Type, *i64Type, *boolType;
 StructType *ioMarkerType, *ioFileType;
-PointerType *i8PT, *ioMarkerPT, *ioFilePT;
+PointerType *i8PT, *ioMarkerPT, *ioFilePT, *fpPT, *i64PT, *ptrPT, *ptrPPT, *ptrPPPT;
 ArrayType* l2AT;
-Constant *fopenFunc, *mcpyFunc, *fprintfFunc, *fcloseFunc, *fscanfFunc;
+Constant *fopenFunc, *mcpyFunc, *fprintfFunc, *fcloseFunc, *fscanfFunc, *printFunc, *mallocFunc, *multMatFunc, *multArMatFunc;
 ConstantInt *ci0, *ci1, *ci2, *ci3, *ci4, *ci5, *ci6, *ci7, *ci8, *ci9, *ci10, *ci11, *bFalse, *ci11_64;
 GlobalVariable *fileGV, *attrGV, *attrGV2, *attrGV3;
 GlobalVariable *l1ArrayGV, *l2ArrayGV;
+vector<Value*> vec00,vec01;
 
+int64_t mod = 1024;
 loglevel_e loglevel = L3_DEBUG;
 
 static cl::opt<int>
@@ -65,6 +68,10 @@ namespace {
 	  i32Type = IntegerType::getInt32Ty(context);
 	  i64Type = IntegerType::getInt64Ty(context);
       i8PT = PointerType::getUnqual(i8Type);
+      i64PT = PointerType::getUnqual(i64Type);
+      ptrPT = PointerType::getUnqual(i64PT);
+      ptrPPT = PointerType::getUnqual(ptrPT);
+      ptrPPPT = PointerType::getUnqual(ptrPPT);
 
 	  ci0 = (ConstantInt*) ConstantInt::getSigned(i32Type, 0);
 	  ci1 = (ConstantInt*) ConstantInt::getSigned(i32Type, 1);
@@ -80,6 +87,13 @@ namespace {
 	  ci11 = (ConstantInt*) ConstantInt::getSigned(i32Type, 11);
 	  bFalse = (ConstantInt*) ConstantInt::getSigned(i1Type, 0);
 	  ci11_64 = (ConstantInt*) ConstantInt::getSigned(i64Type, 11);
+
+	  vec00.push_back(ci0);
+	  vec00.push_back(ci0);
+	  ArrayRef<Value*> ar00(vec00);
+	  vec01.push_back(ci0);
+	  vec01.push_back(ci1);
+	  ArrayRef<Value*> ar01(vec01);
 
  	  Constant* fileVal = ConstantDataArray::getString(context, "tmp.covpro\00", true);
 	  Constant* attrVal = ConstantDataArray::getString(context, "ab+\00", true);
@@ -161,6 +175,22 @@ namespace {
 	  if(ioMarkerType->isOpaque()){
 		ioMarkerType->setBody(arMarker, false);
 	  }
+
+      printFunc = M.getFunction("printf"); 
+      mallocFunc = M.getFunction("malloc"); 
+      vector<Type*> paramVec;
+      paramVec.push_back((Type *) ptrPT); //mat1
+      paramVec.push_back((Type *) ptrPT); //mat2
+      paramVec.push_back((Type *) ptrPT); //result
+      paramVec.push_back(i64Type);		//m1Height
+      paramVec.push_back(i64Type);		//m1Width
+      paramVec.push_back(i64Type);		//m2Height
+      paramVec.push_back(i64Type);		//m2Width
+      paramVec.push_back(i64Type);		//mod
+      ArrayRef<Type*> paramArrayType(paramVec);
+      FunctionType* funcType = FunctionType::get(i64Type, paramArrayType, false);
+      multMatFunc = M.getOrInsertFunction("MultIntMatrix", funcType); 
+      multArMatFunc = M.getOrInsertFunction("MultArMatrix", funcType); 
 
 	  fopenFunc = M.getFunction("fopen");
 	  if(!fopenFunc){
@@ -764,6 +794,32 @@ namespace {
 		inst->eraseFromParent(); // erase the branch
 	}
 
+	bool InsertMatOpq(Module& M, Instruction* inst, Value* arg){
+		Type* argType = arg->getType();
+		if(!argType->isIntegerTy())
+		  return false;
+		
+		AllocaInst* jAI = new AllocaInst(argType, "", inst);
+		StoreInst* jSI = new StoreInst(arg, jAI, inst);
+		LoadInst* jLI = new LoadInst(jAI, "", inst);
+		
+		ConstantInt* ciTmp = (ConstantInt*) ConstantInt::getSigned(argType, 5);
+		AllocaInst* tmpAI = new AllocaInst(argType, "", inst);
+		StoreInst* tmpSI = new StoreInst(ciTmp, tmpAI, inst);
+		LoadInst* tmpLI = new LoadInst(tmpAI, "", inst);
+
+		LLVMContext& context = M.getContext();
+		jLI->setAlignment(4);
+		BinaryOperator* remBO = BinaryOperator::Create(Instruction::SRem, jLI, tmpLI, "rem", inst);
+		CastInst* remCI = new SExtInst(remBO, i64Type, "idxprom", inst);
+		ICmpInst* arCI = new ICmpInst(inst, ICmpInst::ICMP_NE, tmpSI, remCI, "cmp");
+
+		BranchInst::Create(((BranchInst*) inst)->getSuccessor(0),
+			((BranchInst*) inst)->getSuccessor(1),(Value *) arCI,
+			((BranchInst*) inst)->getParent());
+		inst->eraseFromParent(); // erase the branch
+        ConvertIcmp2Mbp(M, arCI);
+	}
     /* doFinalization
      *
      * Overwrite FunctionPass method to apply the transformations to the whole module.
@@ -830,17 +886,21 @@ namespace {
       // Replacing all the branches we found
 	  // TODO: we replace the original simple opaque constant with secure predicates
 	  srand(time(0));
-	  int opq_type_num = 2;
+	  int opq_type_num = 3;
       for(std::vector<Instruction*>::iterator it =toEdit.begin(); it!=toEdit.end(); ++it){
 		Instruction* inst = *it;
 		int opqId = rand() % opq_type_num;
 		if(argType->isIntegerTy()){
 		  switch(opqId){
 		    case 0:{
-			  InsertFproOpq(M, inst, argValue);
+			  InsertMatOpq(M, inst, argValue);
 			  break;
 		    }
 		    case 1:{
+			  InsertFproOpq(M, inst, argValue);
+			  break;
+		    }
+		    case 2:{
 			  InsertArrayOpq(M, inst, argValue);
 			  break;
 		    }
