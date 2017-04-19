@@ -2,7 +2,8 @@
 #include <stdlib.h>	//srand
 #include <time.h>	//time
 #include <math.h>	//
-#include "llvm/Transforms/SymObf/Utils.h"
+#include "llvm/Transforms/Obfuscation/Utils.h"
+#include "MatUtils.h"
 
 using namespace llvm;
 

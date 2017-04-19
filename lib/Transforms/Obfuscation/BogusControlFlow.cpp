@@ -21,12 +21,13 @@ StructType *ioMarkerType, *ioFileType;
 PointerType *i8PT, *ioMarkerPT, *ioFilePT, *fpPT, *i64PT, *ptrPT, *ptrPPT, *ptrPPPT;
 ArrayType* l2AT;
 Constant *fopenFunc, *mcpyFunc, *fprintfFunc, *fcloseFunc, *fscanfFunc, *printFunc, *mallocFunc, *multMatFunc, *multArMatFunc;
-ConstantInt *ci0, *ci1, *ci2, *ci3, *ci4, *ci5, *ci6, *ci7, *ci8, *ci9, *ci10, *ci11, *bFalse, *ci11_64;
+ConstantInt *ci0_64, *ci1_64, *ci2_64, *ci3_64, *ci4_64, *ci5_64, *ci6_64, *ci7_64, *ci8_64, *ci9_64, *ci10_64, *ci11_64, *bFalse;
+ConstantInt *ci0_32, *ci1_32, *ci2_32, *ci3_32, *ci4_32, *ci5_32, *ci6_32, *ci7_32, *ci8_32, *ci9_32, *ci10_32, *ci11_32;
 GlobalVariable *fileGV, *attrGV, *attrGV2, *attrGV3;
 GlobalVariable *l1ArrayGV, *l2ArrayGV;
-vector<Value*> vec00,vec01;
+vector<Value*> vec00_32,vec01_32;
+vector<Value*> vec00_64,vec01_64;
 
-int64_t mod = 1024;
 loglevel_e loglevel = L3_DEBUG;
 
 static cl::opt<int>
@@ -73,27 +74,43 @@ namespace {
       ptrPPT = PointerType::getUnqual(ptrPT);
       ptrPPPT = PointerType::getUnqual(ptrPPT);
 
-	  ci0 = (ConstantInt*) ConstantInt::getSigned(i32Type, 0);
-	  ci1 = (ConstantInt*) ConstantInt::getSigned(i32Type, 1);
-	  ci2 = (ConstantInt*) ConstantInt::getSigned(i32Type, 2);
-	  ci3 = (ConstantInt*) ConstantInt::getSigned(i32Type, 3);
-	  ci4 = (ConstantInt*) ConstantInt::getSigned(i32Type, 4);
-	  ci5 = (ConstantInt*) ConstantInt::getSigned(i32Type, 5);
-	  ci6 = (ConstantInt*) ConstantInt::getSigned(i32Type, 6);
-	  ci7 = (ConstantInt*) ConstantInt::getSigned(i32Type, 7);
-	  ci8 = (ConstantInt*) ConstantInt::getSigned(i32Type, 8);
-	  ci9 = (ConstantInt*) ConstantInt::getSigned(i32Type, 9);
-	  ci10 = (ConstantInt*) ConstantInt::getSigned(i32Type, 10);
-	  ci11 = (ConstantInt*) ConstantInt::getSigned(i32Type, 11);
+	  ci0_32 = (ConstantInt*) ConstantInt::getSigned(i32Type, 0);
+	  ci1_32 = (ConstantInt*) ConstantInt::getSigned(i32Type, 1);
+	  ci2_32 = (ConstantInt*) ConstantInt::getSigned(i32Type, 2);
+	  ci3_32 = (ConstantInt*) ConstantInt::getSigned(i32Type, 3);
+	  ci4_32 = (ConstantInt*) ConstantInt::getSigned(i32Type, 4);
+	  ci5_32 = (ConstantInt*) ConstantInt::getSigned(i32Type, 5);
+	  ci6_32 = (ConstantInt*) ConstantInt::getSigned(i32Type, 6);
+	  ci7_32 = (ConstantInt*) ConstantInt::getSigned(i32Type, 7);
+	  ci8_32 = (ConstantInt*) ConstantInt::getSigned(i32Type, 8);
+	  ci9_32 = (ConstantInt*) ConstantInt::getSigned(i32Type, 9);
+	  ci10_32 = (ConstantInt*) ConstantInt::getSigned(i32Type, 10);
+	  ci11_32 = (ConstantInt*) ConstantInt::getSigned(i32Type, 11);
 	  bFalse = (ConstantInt*) ConstantInt::getSigned(i1Type, 0);
+	  ci0_64 = (ConstantInt*) ConstantInt::getSigned(i64Type, 0);
+	  ci1_64 = (ConstantInt*) ConstantInt::getSigned(i64Type, 1);
+	  ci2_64 = (ConstantInt*) ConstantInt::getSigned(i64Type, 2);
+	  ci3_64 = (ConstantInt*) ConstantInt::getSigned(i64Type, 3);
+	  ci4_64 = (ConstantInt*) ConstantInt::getSigned(i64Type, 4);
+	  ci5_64 = (ConstantInt*) ConstantInt::getSigned(i64Type, 5);
+	  ci6_64 = (ConstantInt*) ConstantInt::getSigned(i64Type, 6);
+	  ci7_64 = (ConstantInt*) ConstantInt::getSigned(i64Type, 7);
+	  ci8_64 = (ConstantInt*) ConstantInt::getSigned(i64Type, 8);
+	  ci9_64 = (ConstantInt*) ConstantInt::getSigned(i64Type, 9);
+	  ci10_64 = (ConstantInt*) ConstantInt::getSigned(i64Type, 10);
 	  ci11_64 = (ConstantInt*) ConstantInt::getSigned(i64Type, 11);
 
-	  vec00.push_back(ci0);
-	  vec00.push_back(ci0);
-	  ArrayRef<Value*> ar00(vec00);
-	  vec01.push_back(ci0);
-	  vec01.push_back(ci1);
-	  ArrayRef<Value*> ar01(vec01);
+	  vec00_64.push_back(ci0_64);
+	  vec00_64.push_back(ci0_64);
+	  vec01_64.push_back(ci0_64);
+	  vec01_64.push_back(ci1_64);
+
+	  vec00_32.push_back(ci0_32);
+	  vec00_32.push_back(ci0_32);
+	  ArrayRef<Value*> ar00(vec00_32);
+	  vec01_32.push_back(ci0_32);
+	  vec01_32.push_back(ci1_32);
+	  ArrayRef<Value*> ar01(vec01_32);
 
  	  Constant* fileVal = ConstantDataArray::getString(context, "tmp.covpro\00", true);
 	  Constant* attrVal = ConstantDataArray::getString(context, "ab+\00", true);
@@ -244,11 +261,11 @@ namespace {
 
       l2AT = ArrayType::get(i32Type, 5);
 	  std::vector<Constant*> l2ArVec;
-	  l2ArVec.push_back(ci0);
-	  l2ArVec.push_back(ci1);
-	  l2ArVec.push_back(ci2);
-	  l2ArVec.push_back(ci3);
-	  l2ArVec.push_back(ci4);
+	  l2ArVec.push_back(ci0_32);
+	  l2ArVec.push_back(ci1_32);
+	  l2ArVec.push_back(ci2_32);
+	  l2ArVec.push_back(ci3_32);
+	  l2ArVec.push_back(ci4_32);
 	  Constant* caL2 = ConstantArray::get(l2AT, l2ArVec);
 	  Constant* caL1 = ConstantArray::get(l2AT, l2ArVec);
 	  l1ArrayGV = new GlobalVariable(M, l2AT, true, GlobalValue::PrivateLinkage, 0, "l1_ary");
@@ -679,8 +696,8 @@ namespace {
 		BitCastInst* strBCI = new BitCastInst((Value*) strAI, i8PT, "", inst);
 
 		vector<Value*> vec0I0;
-		vec0I0.push_back(ci0);
-		vec0I0.push_back(ci0);
+		vec0I0.push_back(ci0_32);
+		vec0I0.push_back(ci0_32);
 		ArrayRef<Value*> ar0I0(vec0I0);
 		GetElementPtrInst* gvEPI = GetElementPtrInst::CreateInBounds(fileGV, ar0I0,"", inst);
 		//BitCastInst* gvBCI = new BitCastInst((Value*) gvEPI, i8PT, "", inst);
@@ -689,7 +706,7 @@ namespace {
 		vecMcpy.push_back(strBCI);
 		vecMcpy.push_back(gvEPI);
 		vecMcpy.push_back(ci11_64);
-		vecMcpy.push_back(ci1);
+		vecMcpy.push_back(ci1_32);
 		vecMcpy.push_back(bFalse);
 		ArrayRef<Value*> arMcpy(vecMcpy);
 
@@ -773,7 +790,7 @@ namespace {
 		BinaryOperator* remBO = BinaryOperator::Create(Instruction::SRem, jLI, tmpLI, "rem", inst);
 		CastInst* remCI = new SExtInst(remBO, i64Type, "idxprom", inst);
 		std::vector<Value*> l1Vec;
-		l1Vec.push_back(ci0);
+		l1Vec.push_back(ci0_32);
 		l1Vec.push_back(remCI);
 		ArrayRef<Value*> l1AR(l1Vec);
 		Instruction* l1EPI = GetElementPtrInst::Create(l1ArrayGV, l1AR, "l1_arrayidx", inst);
@@ -781,7 +798,7 @@ namespace {
 		l1LI->setAlignment(4);
 		CastInst* l2CI = new SExtInst(l1LI, i64Type, "idxprom1", inst);
 		std::vector<Value*> l2Vec;
-		l2Vec.push_back(ci0);
+		l2Vec.push_back(ci0_32);
 		l2Vec.push_back(l2CI);
 		ArrayRef<Value*> l2AR(l2Vec);
 		Instruction* l2EPI = GetElementPtrInst::Create(l2ArrayGV, l2AR, "l2_arrayidx", inst);
@@ -802,17 +819,21 @@ namespace {
 		AllocaInst* jAI = new AllocaInst(argType, "", inst);
 		StoreInst* jSI = new StoreInst(arg, jAI, inst);
 		LoadInst* jLI = new LoadInst(jAI, "", inst);
-		
-		ConstantInt* ciTmp = (ConstantInt*) ConstantInt::getSigned(argType, 5);
-		AllocaInst* tmpAI = new AllocaInst(argType, "", inst);
-		StoreInst* tmpSI = new StoreInst(ciTmp, tmpAI, inst);
-		LoadInst* tmpLI = new LoadInst(tmpAI, "", inst);
-
 		LLVMContext& context = M.getContext();
-		jLI->setAlignment(4);
-		BinaryOperator* remBO = BinaryOperator::Create(Instruction::SRem, jLI, tmpLI, "rem", inst);
-		CastInst* remCI = new SExtInst(remBO, i64Type, "idxprom", inst);
-		ICmpInst* arCI = new ICmpInst(inst, ICmpInst::ICMP_NE, tmpSI, remCI, "cmp");
+		ConstantInt* ciTmp = (ConstantInt*) ConstantInt::getSigned(i64Type, 5);
+		AllocaInst* tmpAI = new AllocaInst(i64Type, "", inst);
+		StoreInst* tmpSI = new StoreInst(ciTmp, tmpAI, inst);
+	  	LoadInst* tmpLI = new LoadInst(tmpAI, "", inst);
+
+		BinaryOperator* remBO;
+		if(((IntegerType*) argType)->getBitWidth() != 64){
+		  CastInst* jCI = new SExtInst(jLI, i64Type, "remCI", inst);
+		  remBO = BinaryOperator::Create(Instruction::SRem, jCI, tmpLI, "rem", inst);
+		} else {
+		  remBO = BinaryOperator::Create(Instruction::SRem, jLI, tmpLI, "rem", inst);
+		}
+
+		ICmpInst* arCI = new ICmpInst(inst, ICmpInst::ICMP_NE, remBO, ciTmp, "cmp");
 
 		BranchInst::Create(((BranchInst*) inst)->getSuccessor(0),
 			((BranchInst*) inst)->getSuccessor(1),(Value *) arCI,
