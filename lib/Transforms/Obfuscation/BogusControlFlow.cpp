@@ -905,7 +905,7 @@ namespace {
       // Replacing all the branches we found
 	  // TODO: we replace the original simple opaque constant with secure predicates
 	  srand(time(0));
-	  int opq_type_num = 1;
+	  int opq_type_num = 3;
       for(std::vector<Instruction*>::iterator it =toEdit.begin(); it!=toEdit.end(); ++it){
 		Instruction* inst = *it;
 		int opqId = rand() % opq_type_num;
