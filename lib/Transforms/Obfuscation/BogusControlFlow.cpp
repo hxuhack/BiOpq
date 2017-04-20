@@ -12,15 +12,14 @@ STATISTIC(NumModifiedBasicBlocks,  "d. Number of modified basic blocks");
 STATISTIC(NumAddedBasicBlocks,  "e. Number of added basic blocks in this module");
 STATISTIC(FinalNumBasicBlocks,  "f. Final number of basic blocks in this module");
 
-
 // Options for the pass
-const int defaultObfRate = 30, defaultObfTime = 1;
+const int defaultObfRate = 50, defaultObfTime = 1;
 
 IntegerType *i1Type, *i8Type, * i16Type, *i32Type, *i64Type, *boolType;
 StructType *ioMarkerType, *ioFileType;
-PointerType *i8PT, *ioMarkerPT, *ioFilePT, *fpPT, *i64PT, *ptrPT, *ptrPPT, *ptrPPPT;
+PointerType *i8PT, *ioMarkerPT, *ioFilePT, *fpPT, *i64PT, *l2Ptr_64, *l3Ptr_64, *l4Ptr_64;
 ArrayType* l2AT;
-Constant *fopenFunc, *mcpyFunc, *fprintfFunc, *fcloseFunc, *fscanfFunc, *printFunc, *mallocFunc, *multMatFunc, *multArMatFunc;
+Constant *fopenFunc, *mcpyFunc, *fprintfFunc, *fcloseFunc, *fscanfFunc, *printFunc, *mallocFunc, *multMatFunc;
 ConstantInt *ci0_64, *ci1_64, *ci2_64, *ci3_64, *ci4_64, *ci5_64, *ci6_64, *ci7_64, *ci8_64, *ci9_64, *ci10_64, *ci11_64, *bFalse;
 ConstantInt *ci0_32, *ci1_32, *ci2_32, *ci3_32, *ci4_32, *ci5_32, *ci6_32, *ci7_32, *ci8_32, *ci9_32, *ci10_32, *ci11_32;
 GlobalVariable *fileGV, *attrGV, *attrGV2, *attrGV3;
@@ -70,9 +69,9 @@ namespace {
 	  i64Type = IntegerType::getInt64Ty(context);
       i8PT = PointerType::getUnqual(i8Type);
       i64PT = PointerType::getUnqual(i64Type);
-      ptrPT = PointerType::getUnqual(i64PT);
-      ptrPPT = PointerType::getUnqual(ptrPT);
-      ptrPPPT = PointerType::getUnqual(ptrPPT);
+      l2Ptr_64 = PointerType::getUnqual(i64PT);
+      l3Ptr_64 = PointerType::getUnqual(l2Ptr_64);
+      l4Ptr_64 = PointerType::getUnqual(l3Ptr_64);
 
 	  ci0_32 = (ConstantInt*) ConstantInt::getSigned(i32Type, 0);
 	  ci1_32 = (ConstantInt*) ConstantInt::getSigned(i32Type, 1);
@@ -196,9 +195,9 @@ namespace {
       printFunc = M.getFunction("printf"); 
       mallocFunc = M.getFunction("malloc"); 
       vector<Type*> paramVec;
-      paramVec.push_back((Type *) ptrPT); //mat1
-      paramVec.push_back((Type *) ptrPT); //mat2
-      paramVec.push_back((Type *) ptrPT); //result
+      paramVec.push_back((Type *) l2Ptr_64); //mat1
+      paramVec.push_back((Type *) l2Ptr_64); //mat2
+      paramVec.push_back((Type *) l2Ptr_64); //result
       paramVec.push_back(i64Type);		//m1Height
       paramVec.push_back(i64Type);		//m1Width
       paramVec.push_back(i64Type);		//m2Height
@@ -207,7 +206,6 @@ namespace {
       ArrayRef<Type*> paramArrayType(paramVec);
       FunctionType* funcType = FunctionType::get(i64Type, paramArrayType, false);
       multMatFunc = M.getOrInsertFunction("MultIntMatrix", funcType); 
-      multArMatFunc = M.getOrInsertFunction("MultArMatrix", funcType); 
 
 	  fopenFunc = M.getFunction("fopen");
 	  if(!fopenFunc){
@@ -833,10 +831,10 @@ namespace {
 		  remBO = BinaryOperator::Create(Instruction::SRem, jLI, tmpLI, "rem", inst);
 		}
 
-		ICmpInst* arCI = new ICmpInst(inst, ICmpInst::ICMP_NE, remBO, ciTmp, "cmp");
+		ICmpInst* arCI = new ICmpInst(inst, ICmpInst::ICMP_EQ, remBO, ciTmp, "cmp");
 
-		BranchInst::Create(((BranchInst*) inst)->getSuccessor(0),
-			((BranchInst*) inst)->getSuccessor(1),(Value *) arCI,
+		BranchInst::Create(((BranchInst*) inst)->getSuccessor(1),
+			((BranchInst*) inst)->getSuccessor(0),(Value *) arCI,
 			((BranchInst*) inst)->getParent());
 		inst->eraseFromParent(); // erase the branch
         ConvertIcmp2Mbp(M, arCI);
@@ -907,7 +905,7 @@ namespace {
       // Replacing all the branches we found
 	  // TODO: we replace the original simple opaque constant with secure predicates
 	  srand(time(0));
-	  int opq_type_num = 3;
+	  int opq_type_num = 1;
       for(std::vector<Instruction*>::iterator it =toEdit.begin(); it!=toEdit.end(); ++it){
 		Instruction* inst = *it;
 		int opqId = rand() % opq_type_num;

@@ -109,6 +109,7 @@ int64_t GenIntMatPair(int64_t** mat, int64_t** matInv, int64_t dim, int64_t mod)
 	  }
 	}
   }
+  /*
   errs()<<"Identity Matrix Verification\n";
   for(int64_t i=0; i < dim; i++){
     for(int64_t j=0; j < dim; j++){
@@ -121,6 +122,7 @@ int64_t GenIntMatPair(int64_t** mat, int64_t** matInv, int64_t dim, int64_t mod)
 	errs()<<"\n";
   }
   errs()<<"-----------------\n";
+  */
   return 0;
 }
 
