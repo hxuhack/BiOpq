@@ -27,21 +27,10 @@ public:
     ConstantInt* ci8Height = (ConstantInt*) ConstantInt::getSigned(i64Type, height * 8);
 	matAI = new AllocaInst(l2Ptr_64,"", pBB);
     Instruction* l1MI = CallInst::CreateMalloc(matAI, i64Type, i8Type, ci8Height, nullptr, (Function*) mallocFunc, "l1_malloc");
-	BitCastInst* l1MBI = new BitCastInst(l1MI, l2Ptr_64, " ", pBB);
+	BitCastInst* l1MBI = new BitCastInst(l1MI, l2Ptr_64, "", pBB);
 	StoreInst* l1MSI = new StoreInst(l1MBI, matAI, pBB);
 
     //Create the blocks
-	LoadInst* fakeLI = new LoadInst(matAI, "", pBB);
-    BranchInst::Create(nextBB, pBB);
-
-    BasicBlock* fCondBB = pBB->splitBasicBlock(fakeLI, "for_cond");
-    BasicBlock* fBodyBB = fCondBB->splitBasicBlock(fakeLI, "for_body");
-    BasicBlock* fIncBB = fBodyBB->splitBasicBlock(fakeLI, "for_inc");
-    BasicBlock* fEndBB = fIncBB->splitBasicBlock(fakeLI, "for_end");
-    continueBB = fEndBB->splitBasicBlock(fakeLI, "continue");
-    pBB->getTerminator()->eraseFromParent();
-    fCondBB->getTerminator()->eraseFromParent();
-	
 	ConstantInt* ciHeight = ConstantInt::getSigned(i64Type, height);
 	ConstantInt* ciWidth = ConstantInt::getSigned(i64Type, width);
 	AllocaInst* iAI = new AllocaInst(i64Type, "", pBB);
@@ -50,6 +39,17 @@ public:
 	StoreInst* hSI = new StoreInst(ciHeight, hAI, pBB);
 	AllocaInst* wAI = new AllocaInst(i64Type, "", pBB);
 	StoreInst* wSI = new StoreInst(ciWidth, wAI, pBB);
+	Instruction* fakeBI = BranchInst::Create(nextBB, pBB);
+
+    BasicBlock* fCondBB = pBB->splitBasicBlock(fakeBI, "for_cond");
+    BasicBlock* fBodyBB = fCondBB->splitBasicBlock(fakeBI, "for_body");
+    BasicBlock* fIncBB = fBodyBB->splitBasicBlock(fakeBI, "for_inc");
+    BasicBlock* fEndBB = fIncBB->splitBasicBlock(fakeBI, "for_end");
+    continueBB = fEndBB->splitBasicBlock(fakeBI, "continue");
+    fCondBB->getTerminator()->eraseFromParent();
+    fBodyBB->getTerminator()->eraseFromParent();
+    fIncBB->getTerminator()->eraseFromParent();
+	
 
 	LoadInst* iLI = new LoadInst(iAI, "", fCondBB);
 	LoadInst* hLI = new LoadInst(hAI, "", fCondBB);
@@ -57,30 +57,32 @@ public:
     BranchInst::Create(fBodyBB, fEndBB, forCI, fCondBB);
 
 	ConstantInt* ci8Width = ConstantInt::getSigned(i64Type, width * 8);
-	Instruction* l2MI = CallInst::CreateMalloc(fBodyBB, i64Type, i8Type, ci8Width, nullptr, (Function*) mallocFunc, "l2_malloc");
-	BitCastInst* l2MBI = new BitCastInst(l2MI, i64PT, " ", fBodyBB);
-	LoadInst* matLI = new LoadInst(matAI," ", fBodyBB);
+	LoadInst* matLI = new LoadInst(matAI,"", fBodyBB);
+	Instruction* l2MI = CallInst::CreateMalloc(matLI, i64Type, i8Type, ci8Width, nullptr, (Function*) mallocFunc, "l2_malloc");
+	BitCastInst* l2MBI = new BitCastInst(l2MI, i64PT, "", fBodyBB);
 	GetElementPtrInst* l1EPI = GetElementPtrInst::CreateInBounds(matLI, iLI,"", fBodyBB);
     StoreInst* l2MSI = new StoreInst(l2MBI, l1EPI, fBodyBB);
+	BranchInst::Create(fIncBB, fBodyBB);
 
     BinaryOperator* iAdd = BinaryOperator::CreateNSWAdd((Value*) iLI, ci1_64, "", fIncBB);
     StoreInst* iFiSI = new StoreInst(iAdd, iAI, fIncBB);
     BranchInst::Create(fCondBB, fIncBB);
 
-    fakeLI->eraseFromParent();
-
+	//continueBB, we shoud use an instruction as the place anchor, so that the original terminator would not get changed 
 	for(int64_t i=0; i<height; i++){
 	  ConstantInt* cii = ConstantInt::getSigned(i64Type, i);
- 	  GetElementPtrInst* l1EPI = GetElementPtrInst::CreateInBounds(matLI, cii,"", continueBB);
+	  LoadInst* matLI2 = new LoadInst(matAI,"", fakeBI);
+ 	  GetElementPtrInst* l1EPI = GetElementPtrInst::CreateInBounds(matLI2, cii,"", fakeBI);
 	  for(int64_t j=0; j<width; j++){	
 		ConstantInt* cij = (ConstantInt*) ConstantInt::getSigned(i64Type,j);
-		LoadInst* l1LI = new LoadInst(l1EPI," ", continueBB);
-		GetElementPtrInst* l2EPI = GetElementPtrInst::CreateInBounds(l1LI, cij,"", continueBB);
+		LoadInst* l1LI = new LoadInst(l1EPI,"", fakeBI);
+		GetElementPtrInst* l2EPI = GetElementPtrInst::CreateInBounds(l1LI, cij,"", fakeBI);
 		ConstantInt* i64Tmp = (ConstantInt*) ConstantInt::get(i64Type, mat[i][j]);
-		StoreInst* storeInst = new StoreInst(i64Tmp, l2EPI, continueBB);
+		StoreInst* storeInst = new StoreInst(i64Tmp, l2EPI, fakeBI);
 	  }
 	}
 
+    fakeBI->eraseFromParent();
     LOG(L2_DEBUG) << "Constructing MatrixInIR...Done";
   }
 
