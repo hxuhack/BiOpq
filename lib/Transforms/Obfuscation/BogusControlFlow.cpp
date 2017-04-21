@@ -13,7 +13,7 @@ STATISTIC(NumAddedBasicBlocks,  "e. Number of added basic blocks in this module"
 STATISTIC(FinalNumBasicBlocks,  "f. Final number of basic blocks in this module");
 
 // Options for the pass
-const int defaultObfRate = 50, defaultObfTime = 1;
+const int defaultObfRate = 30, defaultObfTime = 1;
 
 IntegerType *i1Type, *i8Type, * i16Type, *i32Type, *i64Type, *boolType;
 StructType *ioMarkerType, *ioFileType;
@@ -905,7 +905,7 @@ namespace {
       // Replacing all the branches we found
 	  // TODO: we replace the original simple opaque constant with secure predicates
 	  srand(time(0));
-	  int opq_type_num = 3;
+	  int opq_type_num = 1;
       for(std::vector<Instruction*>::iterator it =toEdit.begin(); it!=toEdit.end(); ++it){
 		Instruction* inst = *it;
 		int opqId = rand() % opq_type_num;

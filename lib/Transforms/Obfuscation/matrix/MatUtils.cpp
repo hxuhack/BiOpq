@@ -33,10 +33,10 @@ int64_t MultIntMatrix(int64_t** mat1, int64_t** mat2, int64_t** retMat, int64_t 
 		ele = (ele + mat1[i][k] * mat2[k][j]) % mod;
 	  }
 	  retMat[i][j] = ele;
-	  //printf("%df",ele);
+	  printf("%d,",ele);
 	}
-	//printf("\n");
+	printf("\n");
   }
-  //printf("*********************\n");
+  printf("*********************\n");
   return 0;
 }

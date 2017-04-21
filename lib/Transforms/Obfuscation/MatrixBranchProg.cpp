@@ -11,12 +11,12 @@ class MatrixInIR{
 private:
   int64_t width = 0;
   int64_t height = 0;
+  AllocaInst* matAI;
   BasicBlock* pBB;
   BasicBlock* nextBB;
   BasicBlock* continueBB;
   LLVMContext& context;
   Module& module;
-  AllocaInst* matAI;
 
 public:
 
@@ -25,7 +25,7 @@ public:
     LOG(L2_DEBUG) << "Constructing MatrixInIR...";
 
     ConstantInt* ci8Height = (ConstantInt*) ConstantInt::getSigned(i64Type, height * 8);
-	matAI = new AllocaInst(l2Ptr_64,"", pBB);
+	matAI = new AllocaInst(l2Ptr_64, "", pBB);
     Instruction* l1MI = CallInst::CreateMalloc(matAI, i64Type, i8Type, ci8Height, nullptr, (Function*) mallocFunc, "l1_malloc");
 	BitCastInst* l1MBI = new BitCastInst(l1MI, l2Ptr_64, "", pBB);
 	StoreInst* l1MSI = new StoreInst(l1MBI, matAI, pBB);
@@ -57,7 +57,7 @@ public:
     BranchInst::Create(fBodyBB, fEndBB, forCI, fCondBB);
 
 	ConstantInt* ci8Width = ConstantInt::getSigned(i64Type, width * 8);
-	LoadInst* matLI = new LoadInst(matAI,"", fBodyBB);
+	LoadInst* matLI = new LoadInst(matAI, "", fBodyBB);
 	Instruction* l2MI = CallInst::CreateMalloc(matLI, i64Type, i8Type, ci8Width, nullptr, (Function*) mallocFunc, "l2_malloc");
 	BitCastInst* l2MBI = new BitCastInst(l2MI, i64PT, "", fBodyBB);
 	GetElementPtrInst* l1EPI = GetElementPtrInst::CreateInBounds(matLI, iLI,"", fBodyBB);
@@ -69,14 +69,14 @@ public:
     BranchInst::Create(fCondBB, fIncBB);
 
 	//continueBB, we shoud use an instruction as the place anchor, so that the original terminator would not get changed 
-	for(int64_t i=0; i<height; i++){
+	for(int i=0; i<height; i++){
 	  ConstantInt* cii = ConstantInt::getSigned(i64Type, i);
-	  LoadInst* matLI2 = new LoadInst(matAI,"", fakeBI);
- 	  GetElementPtrInst* l1EPI = GetElementPtrInst::CreateInBounds(matLI2, cii,"", fakeBI);
-	  for(int64_t j=0; j<width; j++){	
+	  LoadInst* matLI2 = new LoadInst(matAI, "", fakeBI);
+ 	  GetElementPtrInst* l1EPI = GetElementPtrInst::CreateInBounds(matLI2, cii, "", fakeBI);
+	  for(int j=0; j<width; j++){	
 		ConstantInt* cij = (ConstantInt*) ConstantInt::getSigned(i64Type,j);
-		LoadInst* l1LI = new LoadInst(l1EPI,"", fakeBI);
-		GetElementPtrInst* l2EPI = GetElementPtrInst::CreateInBounds(l1LI, cij,"", fakeBI);
+		LoadInst* l1LI = new LoadInst(l1EPI, "", fakeBI);
+		GetElementPtrInst* l2EPI = GetElementPtrInst::CreateInBounds(l1LI, cij, "", fakeBI);
 		ConstantInt* i64Tmp = (ConstantInt*) ConstantInt::get(i64Type, mat[i][j]);
 		StoreInst* storeInst = new StoreInst(i64Tmp, l2EPI, fakeBI);
 	  }
@@ -266,25 +266,21 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
     vec0i.push_back(cii);
     ArrayRef<Value*> ar0i(vec0i);
 
-  LOG(L2_DEBUG) << "TAG:+++++++++++++++++++++++++++++++++==1..";
     GetElementPtrInst* mat0EPI = GetElementPtrInst::CreateInBounds(mat0PtrEPI, cii,"", pBB);
     GetElementPtrInst* mat1EPI = GetElementPtrInst::CreateInBounds(mat1PtrEPI, cii,"", pBB);
 
-	LoadInst* mat0LI = new LoadInst(mat0IR->getMatAI()," ", pBB);
-	LoadInst* mat1LI = new LoadInst(mat1IR->getMatAI()," ", pBB);
+	LoadInst* mat0LI = new LoadInst(mat0IR->getMatAI(), " ", pBB);
+	LoadInst* mat1LI = new LoadInst(mat1IR->getMatAI(), "", pBB);
     StoreInst* mat0StoreInst = new StoreInst(mat0LI, mat0EPI, pBB);
     StoreInst* mat1StoreInst = new StoreInst(mat1LI, mat1EPI, pBB);
   }
 
-  LOG(L2_DEBUG) << "TAG:+++++++++++++++++++++++++++++++++==2..";
   CreateIntMat(tailMat, dim, 1, dim-1, 0);
   MultIntMatrix(randMatInv2, tailMat, tailMatRand, dim, dim, dim, 1, mod);
-  //EncMatrix(tailMatRand,dim,1,dim);
   MatrixInIR* tailMatIR = new MatrixInIR(module, context, pBB, conBB, tailMatRand, dim, 1); //bit
   pBB = tailMatIR->getBB();
   //PrintIntMat(tailMat, dim, 1);
 
-  LOG(L2_DEBUG) << "TAG:+++++++++++++++++++++++++++++++++==3..";
   //Init the parameter for the for loop; 
   AllocaInst* iAI = new AllocaInst(i64Type,"", pBB);
   StoreInst* iSI = new StoreInst(ci1_64, iAI, pBB);
@@ -296,28 +292,16 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   StoreInst* matIdSI = new StoreInst((Value *) andBO, matIdAI, pBB);
   LoadInst* matIdLI = new LoadInst((Value *) matIdAI, "", pBB);
   
-  const char strArg_IdLI[] = "Choose mat for inp: %d\n";
-  //PrintInIR(module, pBB, strArg_IdLI, sizeof(strArg_IdLI), matIdLI);
-
-  vector<Value*> vec0inp;
-  vec0inp.push_back(ci0_64);
-  vec0inp.push_back(matIdLI);
-  ArrayRef<Value*> ar0inp(vec0inp);
   GetElementPtrInst* getBinEPI = GetElementPtrInst::CreateInBounds(matAI, matIdLI,"", pBB);
   GetElementPtrInst* getLenEPI = GetElementPtrInst::CreateInBounds(getBinEPI, ci0_64,"", pBB);
   LoadInst* ldMatLI = new LoadInst(getLenEPI,"",pBB);
 
-  GetElementPtrInst* headMatEPI = GetElementPtrInst::CreateInBounds(headMatIR->getMatAI(), ci0_64,"", pBB);
-  BitCastInst* headMatBI = new BitCastInst((Value*) headMatEPI, l2Ptr_64, "", pBB);
-  AllocaInst* headMatAI = new AllocaInst(l2Ptr_64,"", pBB);
-  StoreInst* headMatSI = new StoreInst(headMatBI, (Value *) headMatAI, pBB);
-  LoadInst* headMatLI = new LoadInst(headMatAI,"", pBB);
+  LoadInst* headMatLI = new LoadInst(headMatIR->getMatAI(),"", pBB);
 
   // Allocate two tmp matrix: height = 1; width = dim;
   AllocaInst* iMatAI = new AllocaInst(l2Ptr_64,"iMat",pBB);
   AllocaInst* iMat2AI = new AllocaInst(l2Ptr_64,"iMat2",pBB);
 
-  //CreateMalloc (BasicBlock *InsertAtEnd, Type *IntPtrTy, Type *AllocTy, Value *AllocSize, Value *ArraySize=nullptr, Function *MallocF=nullptr, const Twine &Name="")
   Instruction* mallocI11 = CallInst::CreateMalloc(iMatAI, i64Type, i8Type, ci8_64, nullptr, (Function*) mallocFunc, "mallocCall11");
   BitCastInst* mallocBI11 = new BitCastInst(mallocI11, l2Ptr_64, "", pBB);
   StoreInst* mallocSI11 = new StoreInst(mallocBI11, iMatAI, pBB);
@@ -376,7 +360,10 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   LoadInst* matIdFbLI = new LoadInst((Value *) matIdAI, "", forBodyBB);
   LoadInst* iFbLI02 = new LoadInst((Value*) iAI, "", forBodyBB);
 
-  PrintInIR(module, forBodyBB, strArg_IdLI, sizeof(strArg_IdLI), matIdFbLI);
+  const char strArg_IdLI1[] = "Choose mat for inp[%d";
+  PrintInIR(module, forBodyBB, strArg_IdLI1, sizeof(strArg_IdLI1), iLI);
+  const char strArg_IdLI2[] = "]: %d\n";
+  PrintInIR(module, forBodyBB, strArg_IdLI2, sizeof(strArg_IdLI2), matIdFbLI);
 
   vector<Value*> vecFb0I0;
   vecFb0I0.push_back(ci0_64);
@@ -424,12 +411,7 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   BasicBlock* falseBB = oriBI->getSuccessor(1);
   oriBI->eraseFromParent();
 
-  GetElementPtrInst* tailMatEPI = GetElementPtrInst::CreateInBounds(tailMatIR->getMatAI(), ci0_64, " ", conBB);
-  BitCastInst* tailMatBI = new BitCastInst((Value*) tailMatEPI, l2Ptr_64, "", conBB);
-  AllocaInst* tailMatAI = new AllocaInst(l2Ptr_64,"", conBB);
-  StoreInst* tailMatSI = new StoreInst(tailMatBI, (Value *) tailMatAI, conBB);
-  LoadInst* tailMatLI = new LoadInst(tailMatAI,"", conBB);
-
+  LoadInst* tailMatLI = new LoadInst(tailMatIR->getMatAI(),"", conBB);
   LoadInst* iMatConLI = new LoadInst(iMatAI,"",conBB);
   LoadInst* iMat2ConLI = new LoadInst(iMat2AI,"",conBB);
 
