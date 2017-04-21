@@ -284,8 +284,8 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   //Init the parameter for the for loop; 
   AllocaInst* iAI = new AllocaInst(i64Type,"", pBB);
   StoreInst* iSI = new StoreInst(ci1_64, iAI, pBB);
-  AllocaInst* lenAllocaInst = new AllocaInst(i64Type,"", pBB);
-  StoreInst* lenStoreInst = new StoreInst(ciLen, (Value *) lenAllocaInst, pBB);
+  AllocaInst* lenAI = new AllocaInst(i64Type,"", pBB);
+  StoreInst* lenSI = new StoreInst(ciLen, (Value *) lenAI, pBB);
 
   AllocaInst* matIdAI = new AllocaInst(i64Type,"mat_idx", pBB);
   BinaryOperator* andBO = BinaryOperator::Create(Instruction::And, (Value *) inpVar, ci1_64, "", pBB);
@@ -345,8 +345,8 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   BranchInst::Create(forCondBB, pBB);
 
   LoadInst* iLI = new LoadInst((Value*) iAI, "", forCondBB);
-  LoadInst* lenLoadInst = new LoadInst((Value*) lenAllocaInst, "", forCondBB);
-  ICmpInst* forII = new ICmpInst(*forCondBB,CmpInst::ICMP_SLT,(Value*) iLI, (Value*) lenLoadInst,"");
+  LoadInst* lenLI = new LoadInst((Value*) lenAI, "", forCondBB);
+  ICmpInst* forII = new ICmpInst(*forCondBB,CmpInst::ICMP_SLT,(Value*) iLI, (Value*) lenLI,"");
   BranchInst::Create(forBodyBB,forEndBB, forII, forCondBB);
 
   //For body
@@ -365,17 +365,8 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   const char strArg_IdLI2[] = "]: %d\n";
   PrintInIR(module, forBodyBB, strArg_IdLI2, sizeof(strArg_IdLI2), matIdFbLI);
 
-  vector<Value*> vecFb0I0;
-  vecFb0I0.push_back(ci0_64);
-  vecFb0I0.push_back(matIdFbLI);
-  ArrayRef<Value*> arFb0I0(vecFb0I0);
-
-  vector<Value*> vecFb0I1;
-  vecFb0I1.push_back(ci0_64);
-  vecFb0I1.push_back(iFbLI02);
-  ArrayRef<Value*> arFb0I1(vecFb0I1);
-
-  GetElementPtrInst* getBinFbEPI = GetElementPtrInst::CreateInBounds(matAI, matIdFbLI,"", forBodyBB);
+  BinaryOperator* idBO = BinaryOperator::Create(Instruction::Mul, matIdFbLI, ci2_64, "mul", forBodyBB);
+  GetElementPtrInst* getBinFbEPI = GetElementPtrInst::CreateInBounds(matAI, idBO,"", forBodyBB);
   GetElementPtrInst* getLenFbEPI = GetElementPtrInst::CreateInBounds(getBinFbEPI, iFbLI02,"", forBodyBB);
 
   LoadInst* ldFbMatLI = new LoadInst(getLenFbEPI,"",forBodyBB);
