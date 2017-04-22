@@ -1,0 +1,7 @@
+build
+*.o 
+*.out 
+*.log
+*.bc
+*.ll
+*.cpp
