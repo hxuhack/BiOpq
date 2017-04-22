@@ -138,17 +138,18 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   if(!(isa<ConstantInt> (*op0) || isa<ConstantInt>(*op1))){
 	LOG(L_INFO) << "[-PI-]:ICmpInst has two symbolic variables; Don't obfuscate!";
   }
-  IntegerType* inpVar; //the variable side 
+  Value* inpVar; //the variable side 
   ConstantInt* ciCmpObj; // the constant side
 
   if(isa<ConstantInt> (*op0)){
 	ciCmpObj = (ConstantInt*)op0;
-	inpVar = (IntegerType*) op1;
+	inpVar = op1;
   }
   else{	
 	ciCmpObj = (ConstantInt*) op1;
-	inpVar = (IntegerType*) op0;
+	inpVar = op0;
   }
+
 
   int64_t len = ciCmpObj->getBitWidth();
   int64_t dim = len + 2; //the dimension of matrix;
@@ -161,16 +162,14 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   ConstantInt* ciDim = (ConstantInt*) ConstantInt::getSigned(i64Type,dim);
   ConstantInt* ciLen = (ConstantInt*) ConstantInt::getSigned(i64Type,len);
   ConstantInt* ci8Dim = (ConstantInt*) ConstantInt::getSigned(i64Type,8*dim);
-  ConstantInt* ciSize = (ConstantInt*) ConstantInt::getSigned(i64Type, dim*dim);
+  ConstantInt* ci2Len = (ConstantInt*) ConstantInt::getSigned(i64Type,2 * len);
 
-  AllocaInst* matAI = new AllocaInst(l2Ptr_64, ciSize, "matrix", pBB);
-  //Get the pointers of matrix for input bit 0
-  GetElementPtrInst* mat0PtrEPI = GetElementPtrInst::CreateInBounds(matAI, ci0_64,"", pBB);
-  //Get the pointers of matrix for input bit 1 
-  GetElementPtrInst* mat1PtrEPI = GetElementPtrInst::CreateInBounds(matAI, ci1_64,"", pBB);
+  AllocaInst* matAI = new AllocaInst(l2Ptr_64, ci2Len, "matrix", pBB);
 
-  const char strArg_1[] = "ICmp constant: %d\n";
-  PrintInIR(module, pBB, strArg_1, sizeof(strArg_1), ciCmpObj);
+  const char strArg_0[] = "ICmp constant: %d, ";
+  PrintInIR(module, pBB, strArg_0, sizeof(strArg_0), ciCmpObj);
+  const char strArg_1[] = "Variable: %d\n";
+  PrintInIR(module, pBB, strArg_1, sizeof(strArg_1), inpVar);
 
   //Generate the matrix and save to matAI
   int64_t** headMat = (int64_t**) malloc (sizeof(int64_t*) * 1);
@@ -260,19 +259,16 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
     //PrintIntMat(midMat0, dim, dim);
     //PrintIntMat(midMat1, dim, dim);
 
-    ConstantInt* cii = (ConstantInt*) ConstantInt::getSigned(i64Type,i);
-    vector<Value*> vec0i;
-    vec0i.push_back(ci0_64);
-    vec0i.push_back(cii);
-    ArrayRef<Value*> ar0i(vec0i);
+    ConstantInt* cii0 = (ConstantInt*) ConstantInt::getSigned(i64Type, i*2);
+    ConstantInt* cii1 = (ConstantInt*) ConstantInt::getSigned(i64Type, i*2+1);
 
-    GetElementPtrInst* mat0EPI = GetElementPtrInst::CreateInBounds(mat0PtrEPI, cii,"", pBB);
-    GetElementPtrInst* mat1EPI = GetElementPtrInst::CreateInBounds(mat1PtrEPI, cii,"", pBB);
+    GetElementPtrInst* mat0iEPI = GetElementPtrInst::CreateInBounds(matAI, cii0,"", pBB);
+    GetElementPtrInst* mat1iEPI = GetElementPtrInst::CreateInBounds(matAI, cii1,"", pBB);
 
-	LoadInst* mat0LI = new LoadInst(mat0IR->getMatAI(), " ", pBB);
+	LoadInst* mat0LI = new LoadInst(mat0IR->getMatAI(), "", pBB);
 	LoadInst* mat1LI = new LoadInst(mat1IR->getMatAI(), "", pBB);
-    StoreInst* mat0StoreInst = new StoreInst(mat0LI, mat0EPI, pBB);
-    StoreInst* mat1StoreInst = new StoreInst(mat1LI, mat1EPI, pBB);
+    StoreInst* mat0SI = new StoreInst(mat0LI, mat0iEPI, pBB);
+    StoreInst* mat1SI = new StoreInst(mat1LI, mat1iEPI, pBB);
   }
 
   CreateIntMat(tailMat, dim, 1, dim-1, 0);
@@ -288,13 +284,15 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   StoreInst* lenSI = new StoreInst(ciLen, (Value *) lenAI, pBB);
 
   AllocaInst* matIdAI = new AllocaInst(i64Type,"mat_idx", pBB);
-  BinaryOperator* andBO = BinaryOperator::Create(Instruction::And, (Value *) inpVar, ci1_64, "", pBB);
+  BinaryOperator* andBO = BinaryOperator::Create(Instruction::And, inpVar, ci1_64, "", pBB);
   StoreInst* matIdSI = new StoreInst((Value *) andBO, matIdAI, pBB);
   LoadInst* matIdLI = new LoadInst((Value *) matIdAI, "", pBB);
   
-  GetElementPtrInst* getBinEPI = GetElementPtrInst::CreateInBounds(matAI, matIdLI,"", pBB);
-  GetElementPtrInst* getLenEPI = GetElementPtrInst::CreateInBounds(getBinEPI, ci0_64,"", pBB);
-  LoadInst* ldMatLI = new LoadInst(getLenEPI,"",pBB);
+  const char strArg_2[] = "Choose mat for inp[0]: %d\n";
+  PrintInIR(module, pBB, strArg_2, sizeof(strArg_2), matIdLI);
+
+  GetElementPtrInst* pos0EPI = GetElementPtrInst::CreateInBounds(matAI, matIdLI,"", pBB);
+  LoadInst* ldMatLI = new LoadInst(pos0EPI, "", pBB);
 
   LoadInst* headMatLI = new LoadInst(headMatIR->getMatAI(),"", pBB);
 
@@ -350,26 +348,24 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   BranchInst::Create(forBodyBB,forEndBB, forII, forCondBB);
 
   //For body
-
+  //(n & ( 1 << k )) >> k
   LoadInst* iFbLI = new LoadInst((Value*) iAI, "", forBodyBB);
-  BinaryOperator* shlFbBO = BinaryOperator::Create(Instruction::Shl, (Value*) ci1_64, iFbLI, "", forBodyBB);
-  BinaryOperator* andFbBO = BinaryOperator::Create(Instruction::And, (Value*) inpVar, shlFbBO, "", forBodyBB);
+  BinaryOperator* shlFbBO = BinaryOperator::Create(Instruction::Shl, ci1_64, iFbLI, "", forBodyBB);
+  BinaryOperator* andFbBO = BinaryOperator::Create(Instruction::And, inpVar, shlFbBO, "", forBodyBB);
   BinaryOperator* ashrFbBO = BinaryOperator::Create(Instruction::AShr, (Value*) andFbBO, iFbLI, "", forBodyBB);
   StoreInst* matIdFbSI = new StoreInst((Value *) ashrFbBO, matIdAI, forBodyBB);
+  LoadInst* matIdFbLI = new LoadInst(matIdAI, "", forBodyBB);
 
-  LoadInst* matIdFbLI = new LoadInst((Value *) matIdAI, "", forBodyBB);
-  LoadInst* iFbLI02 = new LoadInst((Value*) iAI, "", forBodyBB);
+  const char strArg_3[] = "Choose mat for inp[%d";
+  PrintInIR(module, forBodyBB, strArg_3, sizeof(strArg_3), iLI);
+  const char strArg_4[] = "]: %d\n";
+  PrintInIR(module, forBodyBB, strArg_4, sizeof(strArg_4), matIdFbLI);
 
-  const char strArg_IdLI1[] = "Choose mat for inp[%d";
-  PrintInIR(module, forBodyBB, strArg_IdLI1, sizeof(strArg_IdLI1), iLI);
-  const char strArg_IdLI2[] = "]: %d\n";
-  PrintInIR(module, forBodyBB, strArg_IdLI2, sizeof(strArg_IdLI2), matIdFbLI);
+  BinaryOperator* posImBO = BinaryOperator::Create(Instruction::Mul, iFbLI, ci2_64, "mul", forBodyBB);
+  BinaryOperator* posIBO = BinaryOperator::CreateNSWAdd(posImBO, matIdFbLI, "", forBodyBB);
+  GetElementPtrInst* posIEPI = GetElementPtrInst::CreateInBounds(matAI, posIBO,"", forBodyBB);
 
-  BinaryOperator* idBO = BinaryOperator::Create(Instruction::Mul, matIdFbLI, ci2_64, "mul", forBodyBB);
-  GetElementPtrInst* getBinFbEPI = GetElementPtrInst::CreateInBounds(matAI, idBO,"", forBodyBB);
-  GetElementPtrInst* getLenFbEPI = GetElementPtrInst::CreateInBounds(getBinFbEPI, iFbLI02,"", forBodyBB);
-
-  LoadInst* ldFbMatLI = new LoadInst(getLenFbEPI,"",forBodyBB);
+  LoadInst* ldFbMatLI = new LoadInst(posIEPI,"",forBodyBB);
   LoadInst* iMatFbLI = new LoadInst(iMatAI,"",forBodyBB);
   LoadInst* iMat2FbLI = new LoadInst(iMat2AI,"",forBodyBB);
 
