@@ -288,8 +288,8 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   StoreInst* matIdSI = new StoreInst((Value *) andBO, matIdAI, pBB);
   LoadInst* matIdLI = new LoadInst((Value *) matIdAI, "", pBB);
   
-  const char strArg_2[] = "Choose mat for inp[0]: %d\n";
-  PrintInIR(module, pBB, strArg_2, sizeof(strArg_2), matIdLI);
+  //const char strArg_2[] = "Choose mat for inp[0]: %d\n";
+  //PrintInIR(module, pBB, strArg_2, sizeof(strArg_2), matIdLI);
 
   GetElementPtrInst* pos0EPI = GetElementPtrInst::CreateInBounds(matAI, matIdLI,"", pBB);
   LoadInst* ldMatLI = new LoadInst(pos0EPI, "", pBB);

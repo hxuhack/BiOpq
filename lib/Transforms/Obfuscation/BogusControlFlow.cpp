@@ -16,6 +16,7 @@ STATISTIC(FinalNumBasicBlocks,  "f. Final number of basic blocks in this module"
 const int defaultObfRate = 10, defaultObfTime = 1;
 
 IntegerType *i1Type, *i8Type, * i16Type, *i32Type, *i64Type, *boolType;
+Type *floatType, *doubleType;
 StructType *ioMarkerType, *ioFileType;
 PointerType *i8PT, *ioMarkerPT, *ioFilePT, *fpPT, *i64PT, *l2Ptr_64, *l3Ptr_64, *l4Ptr_64;
 ArrayType* l2AT;
@@ -72,6 +73,8 @@ namespace {
       l2Ptr_64 = PointerType::getUnqual(i64PT);
       l3Ptr_64 = PointerType::getUnqual(l2Ptr_64);
       l4Ptr_64 = PointerType::getUnqual(l3Ptr_64);
+	  floatType = Type::getFloatTy(context);
+	  doubleType = Type::getDoubleTy(context);
 
 	  ci0_32 = (ConstantInt*) ConstantInt::getSigned(i32Type, 0);
 	  ci1_32 = (ConstantInt*) ConstantInt::getSigned(i32Type, 1);
@@ -279,7 +282,6 @@ namespace {
         doF(F);
         return true;
       }
-
       return false;
     } // end of runOnFunction()
 
@@ -323,7 +325,7 @@ namespace {
           while(!basicBlocks.empty()){
             NumBasicBlocks ++;
             // Basic Blocks' selection
-            if((int)llvm::cryptoutils->get_range(100) <= ObfProbRate){
+            if(rand() % 100 <= ObfProbRate){
               DEBUG_WITH_TYPE("opt", errs() << "bcf: Block "
                   << NumBasicBlocks <<" selected. \n");
               hasBeenModified = true;
@@ -784,25 +786,42 @@ namespace {
 		LoadInst* tmpLI = new LoadInst(tmpAI, "", inst);
 
 		LLVMContext& context = M.getContext();
-		jLI->setAlignment(4);
 		BinaryOperator* remBO = BinaryOperator::Create(Instruction::SRem, jLI, tmpLI, "rem", inst);
-		CastInst* remCI = new SExtInst(remBO, i64Type, "idxprom", inst);
+		Instruction* remI;
+		if(((IntegerType*) remBO->getType())->getBitWidth() != 64){
+		    remI = new SExtInst(remBO, i64Type, "idxprom", inst);
+		} else {
+			remI =remBO;
+		}
+
 		std::vector<Value*> l1Vec;
 		l1Vec.push_back(ci0_32);
-		l1Vec.push_back(remCI);
+		l1Vec.push_back(remI);
 		ArrayRef<Value*> l1AR(l1Vec);
 		Instruction* l1EPI = GetElementPtrInst::Create(l1ArrayGV, l1AR, "l1_arrayidx", inst);
 		LoadInst* l1LI = new LoadInst(l1EPI, "", false, inst);
-		l1LI->setAlignment(4);
-		CastInst* l2CI = new SExtInst(l1LI, i64Type, "idxprom1", inst);
+
+		Instruction* l1I;
+		if(((IntegerType*) l1LI->getType())->getBitWidth() != 64){
+		    l1I = new SExtInst(l1LI, i64Type, "idxprom1", inst);
+		} else {
+			l1I = l1LI; 
+		}
+
 		std::vector<Value*> l2Vec;
 		l2Vec.push_back(ci0_32);
-		l2Vec.push_back(l2CI);
+		l2Vec.push_back(l1I);
 		ArrayRef<Value*> l2AR(l2Vec);
 		Instruction* l2EPI = GetElementPtrInst::Create(l2ArrayGV, l2AR, "l2_arrayidx", inst);
+
 		LoadInst* l2LI = new LoadInst(l2EPI, "", false, inst);
-		l2LI->setAlignment(4);
-		ICmpInst* arCI = new ICmpInst(inst, ICmpInst::ICMP_NE, l2LI, l1LI, "cmp");
+		Instruction* l2I;
+		if(((IntegerType*) l2LI->getType())->getBitWidth() != 64){
+		    l2I = new SExtInst(l2LI, i64Type, "idxprom1", inst);
+		} else {
+			l2I = l2LI;
+		}
+		ICmpInst* arCI = new ICmpInst(inst, ICmpInst::ICMP_NE, l2I, l1I, "cmp");
 		BranchInst::Create(((BranchInst*) inst)->getSuccessor(0),
 			((BranchInst*) inst)->getSuccessor(1),(Value *) arCI,
 			((BranchInst*) inst)->getParent());
@@ -838,6 +857,35 @@ namespace {
 			((BranchInst*) inst)->getParent());
 		inst->eraseFromParent(); // erase the branch
         ConvertIcmp2Mbp(M, arCI);
+	}
+
+	bool InsertFloatOpq(Module& M, Instruction* inst, Value* arg){
+		Type* argType = arg->getType();
+		if(!argType->isIntegerTy())
+		  return false;
+		
+		LLVMContext& context = M.getContext();
+		ConstantFP* divCFP = ConstantFP::get(context, APFloat(1.000000e+01));
+		ConstantFP* conCFP = ConstantFP::get(context, APFloat(1.000000e-01));
+		AllocaInst* fpAI = new AllocaInst(floatType, "", inst);
+
+		AllocaInst* jAI = new AllocaInst(argType, "", inst);
+		StoreInst* jSI = new StoreInst(arg, jAI, inst);
+		LoadInst* jLI = new LoadInst(jAI, "", inst);
+
+		CastInst* jdbCI = new SIToFPInst(jLI, doubleType, "conv", inst);
+		BinaryOperator* divBO = BinaryOperator::Create(Instruction::FDiv, jdbCI, divCFP, "div", inst);
+		CastInst* divBI = new FPTruncInst(divBO, floatType, "conv1", inst);
+		StoreInst* divSI = new StoreInst(divBI, fpAI, false, inst);
+		LoadInst* fpLI = new LoadInst(fpAI, "", inst);
+		CastInst* cmpCI = new FPExtInst(fpLI, doubleType, "conv2", inst);
+
+		FCmpInst* fpCMP = new FCmpInst(inst, FCmpInst::FCMP_OEQ, cmpCI, conCFP, "cmp");
+
+		BranchInst::Create(((BranchInst*) inst)->getSuccessor(1),
+			((BranchInst*) inst)->getSuccessor(0), fpCMP,
+			((BranchInst*) inst)->getParent());
+		inst->eraseFromParent(); // erase the branch
 	}
     /* doFinalization
      *
@@ -905,14 +953,20 @@ namespace {
       // Replacing all the branches we found
 	  // TODO: we replace the original simple opaque constant with secure predicates
 	  srand(time(0));
-	  int opq_type_num = 1;
+	  int complex_control = 1;
+	  int opq_type_num = 3;
       for(std::vector<Instruction*>::iterator it =toEdit.begin(); it!=toEdit.end(); ++it){
 		Instruction* inst = *it;
 		int opqId = rand() % opq_type_num;
+		opqId+=2 ;
+		if(complex_control > 1){
+			opqId += 10;	
+		}
 		if(argType->isIntegerTy()){
 		  switch(opqId){
 		    case 0:{
 			  InsertMatOpq(M, inst, argValue);
+			  complex_control++;
 			  break;
 		    }
 		    case 1:{
@@ -921,6 +975,10 @@ namespace {
 		    }
 		    case 2:{
 			  InsertArrayOpq(M, inst, argValue);
+			  break;
+		    }
+		    case 3:{
+			  InsertFloatOpq(M, inst, argValue);
 			  break;
 		    }
 		    default:{
