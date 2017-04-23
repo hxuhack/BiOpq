@@ -356,10 +356,10 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   StoreInst* matIdFbSI = new StoreInst((Value *) ashrFbBO, matIdAI, forBodyBB);
   LoadInst* matIdFbLI = new LoadInst(matIdAI, "", forBodyBB);
 
-  const char strArg_3[] = "Choose mat for inp[%d";
-  PrintInIR(module, forBodyBB, strArg_3, sizeof(strArg_3), iLI);
-  const char strArg_4[] = "]: %d\n";
-  PrintInIR(module, forBodyBB, strArg_4, sizeof(strArg_4), matIdFbLI);
+  //const char strArg_3[] = "Choose mat for inp[%d";
+  //PrintInIR(module, forBodyBB, strArg_3, sizeof(strArg_3), iLI);
+  //const char strArg_4[] = "]: %d\n";
+  //PrintInIR(module, forBodyBB, strArg_4, sizeof(strArg_4), matIdFbLI);
 
   BinaryOperator* posImBO = BinaryOperator::Create(Instruction::Mul, iFbLI, ci2_64, "mul", forBodyBB);
   BinaryOperator* posIBO = BinaryOperator::CreateNSWAdd(posImBO, matIdFbLI, "", forBodyBB);

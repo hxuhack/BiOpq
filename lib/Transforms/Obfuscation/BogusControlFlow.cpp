@@ -13,7 +13,7 @@ STATISTIC(NumAddedBasicBlocks,  "e. Number of added basic blocks in this module"
 STATISTIC(FinalNumBasicBlocks,  "f. Final number of basic blocks in this module");
 
 // Options for the pass
-const int defaultObfRate = 10, defaultObfTime = 1;
+const int defaultObfRate = 30, defaultObfTime = 1;
 
 IntegerType *i1Type, *i8Type, * i16Type, *i32Type, *i64Type, *boolType;
 Type *floatType, *doubleType;
@@ -29,6 +29,14 @@ vector<Value*> vec00_32,vec01_32;
 vector<Value*> vec00_64,vec01_64;
 
 loglevel_e loglevel = L3_DEBUG;
+int complex_control = 0;
+
+//set the type of opaque predicate; for evaluation purpose
+static cl::opt<int>
+OpqType("OpqType", cl::desc("Choose the opaque predicate type"), cl::value_desc("opaque predicate type"), cl::init(0), cl::Optional);
+
+static cl::opt<int>
+OpqNum("OpqNum", cl::desc("Set the number of opaque predicates"), cl::value_desc("opaque predicate number"), cl::init(0), cl::Optional);
 
 static cl::opt<int>
 ObfProbRate("boguscf-prob", cl::desc("Choose the probability [%] each basic blocks will be obfuscated by the -bcf pass"), cl::value_desc("probability rate"), cl::init(defaultObfRate), cl::Optional);
@@ -781,6 +789,7 @@ namespace {
 		LoadInst* jLI = new LoadInst(jAI, "", inst);
 		
 		ConstantInt* ciTmp = (ConstantInt*) ConstantInt::getSigned(argType, 5);
+		ConstantInt* ciTmp_64 = (ConstantInt*) ConstantInt::getSigned(i64Type, 5);
 		AllocaInst* tmpAI = new AllocaInst(argType, "", inst);
 		StoreInst* tmpSI = new StoreInst(ciTmp, tmpAI, inst);
 		LoadInst* tmpLI = new LoadInst(tmpAI, "", inst);
@@ -821,7 +830,7 @@ namespace {
 		} else {
 			l2I = l2LI;
 		}
-		ICmpInst* arCI = new ICmpInst(inst, ICmpInst::ICMP_NE, l2I, l1I, "cmp");
+		ICmpInst* arCI = new ICmpInst(inst, ICmpInst::ICMP_NE, l2I, ciTmp_64, "cmp");
 		BranchInst::Create(((BranchInst*) inst)->getSuccessor(0),
 			((BranchInst*) inst)->getSuccessor(1),(Value *) arCI,
 			((BranchInst*) inst)->getParent());
@@ -951,22 +960,24 @@ namespace {
 
 
       // Replacing all the branches we found
-	  // TODO: we replace the original simple opaque constant with secure predicates
+	  // We replace the original simple opaque constant with secure predicates
 	  srand(time(0));
-	  int complex_control = 1;
-	  int opq_type_num = 3;
+
       for(std::vector<Instruction*>::iterator it =toEdit.begin(); it!=toEdit.end(); ++it){
 		Instruction* inst = *it;
-		int opqId = rand() % opq_type_num;
-		opqId+=2 ;
-		if(complex_control > 1){
-			opqId += 10;	
-		}
+		//int opqId = rand() % opq_type_num;
+
 		if(argType->isIntegerTy()){
+		  int opqId;
+		  if(complex_control < OpqNum || OpqNum == 0){
+		    opqId = OpqType;	
+			complex_control++;
+		  } else {
+			opqId = 100;//the default opaque predicate	
+		  }
 		  switch(opqId){
 		    case 0:{
 			  InsertMatOpq(M, inst, argValue);
-			  complex_control++;
 			  break;
 		    }
 		    case 1:{

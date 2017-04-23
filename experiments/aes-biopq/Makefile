@@ -7,7 +7,7 @@ aes: aes.o rtlib.o
 
 aes.o: aes.c
 	#$(CC) aes.c -o aes.o
-	$(CC) -Wall -DTEST_VECTORS -c aes.c -o aes.o -mllvm -bcf
+	$(CC) -Wall -DTEST_VECTORS -c $< -mllvm -bcf -mllvm -boguscf-prob=10 -mllvm -OpqType=100 -mllvm -OpqNum=1 
 
 rtlib.o: rtlib.c
 	$(CC) -c rtlib.c -o rtlib.o
