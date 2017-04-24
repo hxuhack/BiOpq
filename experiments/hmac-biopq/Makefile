@@ -2,16 +2,17 @@ CC = ~/BiOpq/build/bin/clang
 
 all: hmac
 
-hmac: rtlib.o hmac.o sha2.o
-	$(CC) sha2.o hmac.o -o hmac
+hmac: hmac_sha2.o sha2.o rtlib.o
+	$(CC) sha2.o hmac_sha2.o rtlib.o -o hmac
 
-hmac.o: hmac_sha2.c hmac_sha2.h
-	$(CC) -Wall -DTEST_VECTORS -c $< -mllvm -bcf -mllvm -boguscf-prob=10 -mllvm -OpqType=100 -mllvm -OpqNum=1 
+hmac_sha2.o: hmac_sha2.c hmac_sha2.h
+	$(CC) -Wall -DTEST_VECTORS -c hmac_sha2.c -o hmac_sha2.o -mllvm -bcf -mllvm -boguscf-prob=10 -mllvm -OpqType=2 -mllvm -OpqNum=10 
 
 sha2.o: sha2.c sha2.h
-	$(CC) -c sha2.c -o sha2.o -mllvm -bcf
+	$(CC) -c sha2.c -o sha2.o -mllvm -bcf -mllvm -boguscf-prob=10 -mllvm -OpqType=2 -mllvm -OpqNum=10 
+
 rtlib.o: rtlib.c
-	$(CC) -c rtlib.c -o rtlib.o
+	$(CC) -c $<
 
 clean:
 	- rm -rf *.o hmac

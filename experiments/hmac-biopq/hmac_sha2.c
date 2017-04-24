@@ -405,7 +405,7 @@ void test(const char *vector, unsigned char *digest,
     }
 }
 
-int main(void)
+int main(int argc, char** argv)
 {
     static const char *vectors[] =
     {
