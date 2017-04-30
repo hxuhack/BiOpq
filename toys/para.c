@@ -1,28 +1,29 @@
 #include <unistd.h> 
 
 int main(int argc, char** argv){
-    int pid, fd[2], j = atoi(argv[1]);
+    int i, j = atoi(argv[1]);
+    int pid, fd[2];
     pipe(fd);
     if((pid=fork())==-1)
-	return -1;
-    if(pid == 0){
-        close(fd[0]);
-	char tmp[16];
-	sprintf(tmp,"%d",++j);
-        write(fd[1],tmp,sizeof(tmp));
-	wait(NULL);
+	  return -1;
+    if(pid == 0){//child process
+      close(fd[0]);
+	  char tmp[20];
+	  sprintf(tmp,"%d",j);
+      write(fd[1],tmp,sizeof(tmp));
+	  exit(0);
     }
     else{
-	char content[2];
-        close(fd[1]);
-        read(fd[0],content,1);
- 	content[1] = '\0';
-	printf("%s\n", content);
-        if(strcmp(content,"100")==0){
-	    printf("bogus\n");
-	}
-        if(strcmp(content,"1")==0){
-            printf("bogus\n");
-        }
+      close(fd[1]);
+	  char receive[20];
+      read(fd[0], receive, 20);
+	  i = atoi(receive);
     }
+	if(i != j){
+	  printf("Bogus\n");
+	}
+	if(i == 7){
+	  printf("Foo\n");
+    }
+	printf("Bar\n");
 }

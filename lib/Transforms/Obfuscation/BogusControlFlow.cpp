@@ -13,13 +13,14 @@ STATISTIC(NumAddedBasicBlocks,  "e. Number of added basic blocks in this module"
 STATISTIC(FinalNumBasicBlocks,  "f. Final number of basic blocks in this module");
 
 // Options for the pass
-const int defaultObfRate = 30, defaultObfTime = 1;
+const int defaultObfRate = 3, defaultObfTime = 1;
 
 IntegerType *i1Type, *i8Type, * i16Type, *i32Type, *i64Type, *boolType;
-Type *floatType, *doubleType;
+Type *voidType, *floatType, *doubleType;
 StructType *ioMarkerType, *ioFileType;
-PointerType *i8PT, *ioMarkerPT, *ioFilePT, *fpPT, *i64PT, *l2Ptr_64, *l3Ptr_64, *l4Ptr_64;
-Constant *fopenFunc, *mcpyFunc, *fprintfFunc, *fcloseFunc, *fscanfFunc, *printFunc, *mallocFunc, *multMatFunc;
+PointerType *i8PT, *ioMarkerPT, *ioFilePT, *fpPT, *i32PT, *i64PT, *l2Ptr_64, *l3Ptr_64, *l4Ptr_64;
+Constant *atoiFunc, *fopenFunc, *mcpyFunc, *fprintfFunc, *fcloseFunc, *fscanfFunc, *printFunc, *mallocFunc, *pipeFunc, *forkFunc, *sprintfFunc, *closeFunc, *readFunc, *writeFunc, *exitFunc;
+Constant *multMatFunc, *threadpropFunc, *forkpropFunc;
 ConstantInt *ci0_64, *ci1_64, *ci2_64, *ci3_64, *ci4_64, *ci5_64, *ci6_64, *ci7_64, *ci8_64, *ci9_64, *ci10_64, *ci11_64, *bFalse;
 ConstantInt *ci0_32, *ci1_32, *ci2_32, *ci3_32, *ci4_32, *ci5_32, *ci6_32, *ci7_32, *ci8_32, *ci9_32, *ci10_32, *ci11_32;
 GlobalVariable *fileGV, *attrGV, *attrGV2, *attrGV3;
@@ -28,6 +29,7 @@ vector<Value*> vec00_64,vec01_64;
 
 loglevel_e loglevel = L3_DEBUG;
 int complex_control = 0;
+int obf_control = 0;
 
 //set the type of opaque predicate; for evaluation purpose
 static cl::opt<int>
@@ -69,12 +71,14 @@ namespace {
 				context.emitError(Twine ("BogusControlFlow application basic blocks percentage -boguscf-prob=x must be 0 < x <= 100"));
 			}
 
+			voidType = Type::getVoidTy(context);
 			i1Type = IntegerType::get(context, 1);
 			i8Type = IntegerType::getInt8Ty(context);
 			i16Type = IntegerType::getInt16Ty(context);
 			i32Type = IntegerType::getInt32Ty(context);
 			i64Type = IntegerType::getInt64Ty(context);
 			i8PT = PointerType::getUnqual(i8Type);
+			i32PT = PointerType::getUnqual(i32Type);
 			i64PT = PointerType::getUnqual(i64Type);
 			l2Ptr_64 = PointerType::getUnqual(i64PT);
 			l3Ptr_64 = PointerType::getUnqual(l2Ptr_64);
@@ -121,7 +125,7 @@ namespace {
 			ArrayRef<Value*> ar01(vec01_32);
 
 			Constant* fileVal = ConstantDataArray::getString(context, "tmp.covpro\00", true);
-			Constant* attrVal = ConstantDataArray::getString(context, "ab+\00", true);
+			Constant* attrVal = ConstantDataArray::getString(context, "w+\00", true);
 			Constant* attrVal2 = ConstantDataArray::getString(context, "r\00", true);
 			Constant* attrVal3 = ConstantDataArray::getString(context, "%d\00", true);
 			fileGV = new GlobalVariable(M, fileVal->getType(), false, GlobalValue::PrivateLinkage, 0, "file.name");
@@ -203,6 +207,7 @@ namespace {
 
 			printFunc = M.getFunction("printf"); 
 			mallocFunc = M.getFunction("malloc"); 
+
 			vector<Type*> paramVec;
 			paramVec.push_back((Type *) l2Ptr_64); //mat1
 			paramVec.push_back((Type *) l2Ptr_64); //mat2
@@ -215,6 +220,18 @@ namespace {
 			ArrayRef<Type*> paramArrayType(paramVec);
 			FunctionType* funcType = FunctionType::get(i64Type, paramArrayType, false);
 			multMatFunc = M.getOrInsertFunction("MultIntMatrix", funcType); 
+
+			vector<Type*> forkPropVec;
+			forkPropVec.push_back(i64Type);
+			ArrayRef<Type*> arForkProp(forkPropVec);
+			funcType = FunctionType::get(i64Type, arForkProp, false);
+			forkpropFunc = M.getOrInsertFunction("ForkProp", funcType); 
+
+			vector<Type*> tpropVec;
+			tpropVec.push_back(i64Type);
+			ArrayRef<Type*> arTprop(tpropVec);
+			funcType = FunctionType::get(i64Type, arTprop, false);
+			threadpropFunc = M.getOrInsertFunction("ThreadProp", funcType); 
 
 			fopenFunc = M.getFunction("fopen");
 			if(!fopenFunc){
@@ -266,7 +283,72 @@ namespace {
 				fcloseFunc = M.getOrInsertFunction("fclose", fcloseFT);
 			}
 
+			forkFunc = M.getFunction("fork");
+			if(!forkFunc){
+				vector<Type*> forkVec;
+				FunctionType* forkFT = FunctionType::get(i32Type, forkVec, false);
+				forkFunc = M.getOrInsertFunction("fork", forkFT);
+			}
 
+			pipeFunc = M.getFunction("pipe");
+			if(!pipeFunc){
+				vector<Type*> pipeVec;
+				pipeVec.push_back(i32PT);
+				FunctionType* pipeFT = FunctionType::get(i32Type, pipeVec, false);
+				pipeFunc = M.getOrInsertFunction("pipe", pipeFT);
+			}
+
+			atoiFunc = M.getFunction("atoi");
+			if(!atoiFunc){
+				vector<Type*> atoiVec;
+				FunctionType* atoiFT = FunctionType::get(i32Type, atoiVec, true);
+				atoiFunc = M.getOrInsertFunction("atoi", atoiFT);
+			}
+
+			closeFunc = M.getFunction("close");
+			if(!closeFunc){
+				vector<Type*> closeVec;
+				closeVec.push_back(i32Type);
+				FunctionType* closeFT = FunctionType::get(i32Type, closeVec, false);
+				closeFunc = M.getOrInsertFunction("close", closeFT);
+			}
+
+			sprintfFunc = M.getFunction("sprintf");
+			if(!sprintfFunc){
+				vector<Type*> sprintfVec;
+				sprintfVec.push_back(i8PT);
+				sprintfVec.push_back(i8PT);
+				FunctionType* sprintfFT = FunctionType::get(i32Type, sprintfVec, true);
+				sprintfFunc = M.getOrInsertFunction("sprintf", sprintfFT);
+			}
+
+			readFunc = M.getFunction("read");
+			if(!readFunc){
+				vector<Type*> readVec;
+				readVec.push_back(i32Type);
+				readVec.push_back(i8PT);
+				readVec.push_back(i64Type);
+				FunctionType* readFT = FunctionType::get(i64Type, readVec, false);
+				readFunc = M.getOrInsertFunction("read", readFT);
+			}
+
+			writeFunc = M.getFunction("write");
+			if(!writeFunc){
+				vector<Type*> writeVec;
+				writeVec.push_back(i32Type);
+				writeVec.push_back(i8PT);
+				writeVec.push_back(i64Type);
+				FunctionType* writeFT = FunctionType::get(i64Type, writeVec, false);
+				writeFunc = M.getOrInsertFunction("write", writeFT);
+			}
+
+			exitFunc = M.getFunction("exit");
+			if(!exitFunc){
+				vector<Type*> exitVec;
+				exitVec.push_back(i32Type);
+				FunctionType* exitFT = FunctionType::get(voidType, exitVec, false);
+				exitFunc = M.getOrInsertFunction("exit", exitFT);
+			}
 			// If fla annotations
 			if(toObfuscate(flag,&F,"bcf")) {
 				bogus(F);
@@ -316,7 +398,8 @@ namespace {
 				while(!basicBlocks.empty()){
 					NumBasicBlocks ++;
 					// Basic Blocks' selection
-					if(rand() % 100 <= ObfProbRate){
+					if(obf_control++ % 10 < ObfProbRate){
+						
 						DEBUG_WITH_TYPE("opt", errs() << "bcf: Block "
 									<< NumBasicBlocks <<" selected. \n");
 						hasBeenModified = true;
@@ -753,11 +836,47 @@ namespace {
 			Instruction* fcloseCI2 = CallInst::Create(fcloseFunc, arFclose2, "", inst);
 
 			LoadInst* iLI = new LoadInst(iAI, "", inst);
-			//ICmpInst* ijCI = new ICmpInst(inst, ICmpInst::ICMP_EQ, iLI, jLI);
-			ICmpInst* ijCI = new ICmpInst(inst, ICmpInst::ICMP_NE, iLI, jLI);
+			ICmpInst* ijCI = new ICmpInst(inst, ICmpInst::ICMP_EQ, iLI, jLI);
 
 			BranchInst::Create(((BranchInst*) inst)->getSuccessor(0),
 						((BranchInst*) inst)->getSuccessor(1),(Value *) ijCI,
+						((BranchInst*) inst)->getParent());
+			inst->eraseFromParent(); // erase the branch
+		}
+
+		bool InsertParaOpq(Module &M, Instruction* inst, Value* arg){
+			Type* argType = arg->getType();
+			if(!argType->isIntegerTy()){
+				InsertDefaultOpq(M, inst);
+				return false;
+			}
+
+			AllocaInst* jAI = new AllocaInst(argType, "", inst);
+			StoreInst* jSI = new StoreInst(arg, jAI, inst);
+			LoadInst* jLI = new LoadInst(jAI, "", inst);
+			
+			vector<Value*> vecProp;
+			CastInst* j64CI;
+			if(((IntegerType*) argType)->getBitWidth() != 64){
+				j64CI = new SExtInst(jLI, i64Type, "idxprom", inst);
+				vecProp.push_back(j64CI);
+			}else{
+				vecProp.push_back(jLI);
+			}
+			ArrayRef<Value*> arProp(vecProp);
+			//CallInst* propCI = CallInst::Create(forkpropFunc, arProp, "", inst);
+			CallInst* propCI = CallInst::Create(threadpropFunc, arProp, "", inst);
+
+			ICmpInst* cmpCI;
+			if(((IntegerType*) argType)->getBitWidth() != 64){
+				cmpCI = new ICmpInst(inst, ICmpInst::ICMP_EQ, j64CI, propCI);
+			}else{
+				cmpCI = new ICmpInst(inst, ICmpInst::ICMP_EQ, jLI, propCI);
+			}
+
+
+			BranchInst::Create(((BranchInst*) inst)->getSuccessor(0),
+						((BranchInst*) inst)->getSuccessor(1),(Value *) cmpCI,
 						((BranchInst*) inst)->getParent());
 			inst->eraseFromParent(); // erase the branch
 		}
@@ -862,16 +981,13 @@ namespace {
 			LoadInst* jLI = new LoadInst(jAI, "", inst);
 			LLVMContext& context = M.getContext();
 			ConstantInt* ciTmp = (ConstantInt*) ConstantInt::getSigned(i64Type, 5);
-			AllocaInst* tmpAI = new AllocaInst(i64Type, "", inst);
-			StoreInst* tmpSI = new StoreInst(ciTmp, tmpAI, inst);
-			LoadInst* tmpLI = new LoadInst(tmpAI, "", inst);
 
 			BinaryOperator* remBO;
 			if(((IntegerType*) argType)->getBitWidth() != 64){
 				CastInst* jCI = new SExtInst(jLI, i64Type, "remCI", inst);
-				remBO = BinaryOperator::Create(Instruction::SRem, jCI, tmpLI, "rem", inst);
+				remBO = BinaryOperator::Create(Instruction::SRem, jCI, ciTmp, "rem", inst);
 			} else {
-				remBO = BinaryOperator::Create(Instruction::SRem, jLI, tmpLI, "rem", inst);
+				remBO = BinaryOperator::Create(Instruction::SRem, jLI, ciTmp, "rem", inst);
 			}
 
 			ICmpInst* arCI = new ICmpInst(inst, ICmpInst::ICMP_EQ, remBO, ciTmp, "cmp");
@@ -911,6 +1027,9 @@ namespace {
 						((BranchInst*) inst)->getParent());
 			inst->eraseFromParent(); // erase the branch
 		}
+		bool InsertHashOpq(Module &M, Instruction* inst, Value* arg){
+
+		}
 		/* doFinalization
 		 *
 		 * Overwrite FunctionPass method to apply the transformations to the whole module.
@@ -931,12 +1050,6 @@ namespace {
 				argValue = &*argIt;
 				argType = argValue->getType();
 				if(argType->isIntegerTy()){
-					break;
-				}
-				if(argType->isFloatingPointTy()){
-					break;
-				}
-				if(argType->isPointerTy()){
 					break;
 				}
 			}
@@ -985,6 +1098,7 @@ namespace {
 				if(argType == NULL){
 					InsertDefaultOpq(M, inst);
 				} else {
+					//LOG(L_INFO) << "complex_control = " << complex_control;
 					if(argType->isIntegerTy()){
 						int opqId;
 						if(complex_control < OpqNum || OpqNum == 0){
@@ -994,20 +1108,28 @@ namespace {
 							opqId = 100;//the default opaque predicate	
 						}
 						switch(opqId){
-							case 0:{
-									   InsertMatOpq(M, inst, argValue);
-									   break;
-								   }
 							case 1:{
-									   InsertFproOpq(M, inst, argValue);
-									   break;
-								   }
-							case 2:{
 									   InsertArrayOpq(M, inst, argValue);
 									   break;
 								   }
-							case 3:{
+							case 2:{
 									   InsertFloatOpq(M, inst, argValue);
+									   break;
+								   }
+							case 3:{
+									   InsertFproOpq(M, inst, argValue);
+									   break;
+								   }
+							case 4:{
+									   InsertParaOpq(M, inst, argValue);
+									   break;
+								   }
+							case 101:{
+									   InsertMatOpq(M, inst, argValue);
+									   break;
+								   }
+							case 102:{
+									   InsertHashOpq(M, inst, argValue);
 									   break;
 								   }
 							default:{

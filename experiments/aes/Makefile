@@ -1,4 +1,3 @@
-
 CC = ~/BiOpq/build/bin/clang
 
 all: aes 

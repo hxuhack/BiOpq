@@ -28,6 +28,6 @@ extern ConstantInt *ci0_32, *ci1_32, *ci2_32, *ci3_32, *ci4_32, *ci5_32, *ci6_32
 extern vector<Value*> vec00_32,vec01_32;
 extern vector<Value*> vec00_64,vec01_64;
 
-extern llvm::Constant *printFunc, *mallocFunc, *multMatFunc; 
+extern llvm::Constant *printFunc, *mallocFunc, *pipeFunc, *forkFunc, *multMatFunc; 
 
 #endif
