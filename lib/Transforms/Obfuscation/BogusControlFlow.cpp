@@ -844,6 +844,42 @@ namespace {
 			inst->eraseFromParent(); // erase the branch
 		}
 
+		bool InsertParaForkOpq(Module &M, Instruction* inst, Value* arg){
+			Type* argType = arg->getType();
+			if(!argType->isIntegerTy()){
+				InsertDefaultOpq(M, inst);
+				return false;
+			}
+
+			AllocaInst* jAI = new AllocaInst(argType, "", inst);
+			StoreInst* jSI = new StoreInst(arg, jAI, inst);
+			LoadInst* jLI = new LoadInst(jAI, "", inst);
+			
+			vector<Value*> vecProp;
+			CastInst* j64CI;
+			if(((IntegerType*) argType)->getBitWidth() != 64){
+				j64CI = new SExtInst(jLI, i64Type, "idxprom", inst);
+				vecProp.push_back(j64CI);
+			}else{
+				vecProp.push_back(jLI);
+			}
+			ArrayRef<Value*> arProp(vecProp);
+			CallInst* propCI = CallInst::Create(forkpropFunc, arProp, "", inst);
+
+			ICmpInst* cmpCI;
+			if(((IntegerType*) argType)->getBitWidth() != 64){
+				cmpCI = new ICmpInst(inst, ICmpInst::ICMP_EQ, j64CI, propCI);
+			}else{
+				cmpCI = new ICmpInst(inst, ICmpInst::ICMP_EQ, jLI, propCI);
+			}
+
+
+			BranchInst::Create(((BranchInst*) inst)->getSuccessor(0),
+						((BranchInst*) inst)->getSuccessor(1),(Value *) cmpCI,
+						((BranchInst*) inst)->getParent());
+			inst->eraseFromParent(); // erase the branch
+		}
+
 		bool InsertParaOpq(Module &M, Instruction* inst, Value* arg){
 			Type* argType = arg->getType();
 			if(!argType->isIntegerTy()){
@@ -1122,6 +1158,10 @@ namespace {
 								   }
 							case 4:{
 									   InsertParaOpq(M, inst, argValue);
+									   break;
+								   }
+							case 5:{
+									   InsertParaForkOpq(M, inst, argValue);
 									   break;
 								   }
 							case 101:{
